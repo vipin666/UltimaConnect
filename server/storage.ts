@@ -10,6 +10,7 @@ import {
   maintenanceRequests,
   biometricRequests,
   tenantDocuments,
+  passwordResetTokens,
   type User,
   type UpsertUser,
   type Post,
@@ -39,6 +40,8 @@ import {
   type TenantDocument,
   type TenantDocumentWithUser,
   type InsertTenantDocument,
+  type PasswordResetToken,
+  type InsertPasswordResetToken,
   type BookingReport,
 } from "@shared/schema";
 import { db } from "./db";
@@ -48,6 +51,17 @@ export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  
+  // Local authentication
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: UpsertUser): Promise<User>;
+  updateUserPassword(userId: string, hashedPassword: string): Promise<User>;
+  
+  // Password reset
+  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
+  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  markTokenAsUsed(tokenId: string): Promise<void>;
   
   // User management
   getAllUsers(): Promise<User[]>;
@@ -143,6 +157,52 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return user;
     }
+  }
+
+  // Local authentication
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUser(userData: UpsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(userData).returning();
+    return user;
+  }
+
+  async updateUserPassword(userId: string, hashedPassword: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ password: hashedPassword, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+    return user;
+  }
+
+  // Password reset
+  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
+    const [resetToken] = await db.insert(passwordResetTokens).values(token).returning();
+    return resetToken;
+  }
+
+  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
+    const [resetToken] = await db
+      .select()
+      .from(passwordResetTokens)
+      .where(eq(passwordResetTokens.token, token));
+    return resetToken;
+  }
+
+  async markTokenAsUsed(tokenId: string): Promise<void> {
+    await db
+      .update(passwordResetTokens)
+      .set({ used: true })
+      .where(eq(passwordResetTokens.id, tokenId));
   }
 
   // User management
@@ -717,19 +777,7 @@ export class DatabaseStorage implements IStorage {
     return updatedRequest;
   }
 
-  // Additional user management methods
-  async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users).orderBy(users.createdAt);
-  }
-
-  async updateUserStatus(userId: string, status: string): Promise<User> {
-    const [updatedUser] = await db
-      .update(users)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(users.id, userId))
-      .returning();
-    return updatedUser;
-  }
+  // Removed duplicate user management methods (already defined above)
 
   // Biometric request operations
   async getBiometricRequests(): Promise<BiometricRequestWithUser[]> {

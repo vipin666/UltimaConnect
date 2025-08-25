@@ -2,26 +2,273 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema, insertMessageSchema, insertAnnouncementSchema, insertMaintenanceRequestSchema, insertBiometricRequestSchema, insertTenantDocumentSchema } from "@shared/schema";
+import { hashPassword, comparePasswords, generateResetToken, getPasswordResetTokenExpiry, isPasswordResetTokenExpired } from "./auth";
+import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema, insertMessageSchema, insertAnnouncementSchema, insertMaintenanceRequestSchema, insertBiometricRequestSchema, insertTenantDocumentSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import passport from "passport";
+import { Strategy as LocalStrategy } from "passport-local";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup local authentication strategy
+  passport.use(
+    new LocalStrategy(
+      { usernameField: 'username', passwordField: 'password' },
+      async (username, password, done) => {
+        try {
+          const user = await storage.getUserByUsername(username.toLowerCase());
+          if (!user || !user.password) {
+            return done(null, false, { message: 'Invalid username or password' });
+          }
+          
+          const isValidPassword = await comparePasswords(password, user.password);
+          if (!isValidPassword) {
+            return done(null, false, { message: 'Invalid username or password' });
+          }
+          
+          if (user.status !== 'active') {
+            return done(null, false, { message: 'Account is not active. Please contact admin.' });
+          }
+          
+          return done(null, user);
+        } catch (error) {
+          return done(error);
+        }
+      }
+    )
+  );
+
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Local authentication routes
+  app.post('/api/auth/local/login', (req, res, next) => {
+    passport.authenticate('local', (err: any, user: any, info: any) => {
+      if (err) {
+        return res.status(500).json({ message: 'Authentication failed' });
+      }
+      if (!user) {
+        return res.status(401).json({ message: info?.message || 'Invalid credentials' });
+      }
+      
+      req.logIn(user, (err: any) => {
+        if (err) {
+          return res.status(500).json({ message: 'Login failed' });
+        }
+        res.json(user);
+      });
+    })(req, res, next);
+  });
+
+  app.post('/api/auth/local/register', async (req, res) => {
     try {
-      const userEmail = req.user.claims.email;
-      // Find user by email since we're using email as the lookup key
-      const allUsers = await storage.getAllUsers();
-      const user = allUsers.find((u: any) => u.email === userEmail);
-      res.json(user || null);
+      const { username, password, firstName, lastName, email, unitNumber } = req.body;
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(username.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+      
+      const existingEmail = await storage.getUserByEmail(email);
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+      
+      // Hash password
+      const hashedPassword = await hashPassword(password);
+      
+      // Create user with pending status (requires admin approval)
+      const userData = {
+        username: username.toLowerCase(),
+        password: hashedPassword,
+        firstName,
+        lastName,
+        email,
+        unitNumber,
+        role: 'resident' as const,
+        status: 'pending' as const,
+        isOwner: true,
+      };
+      
+      const user = await storage.createUser(userData);
+      
+      res.status(201).json({ 
+        message: 'Registration successful. Please wait for admin approval.',
+        user: { 
+          id: user.id, 
+          username: user.username, 
+          firstName: user.firstName, 
+          lastName: user.lastName,
+          status: user.status 
+        } 
+      });
     } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      console.error('Registration error:', error);
+      res.status(500).json({ message: 'Registration failed' });
     }
   });
+
+  app.post('/api/auth/forgot-password', async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists for security
+        return res.json({ message: 'If that email exists, a reset link has been sent.' });
+      }
+      
+      // Generate reset token
+      const token = generateResetToken();
+      const expiresAt = getPasswordResetTokenExpiry();
+      
+      await storage.createPasswordResetToken({
+        userId: user.id,
+        token,
+        expiresAt,
+        used: false,
+      });
+      
+      // In a real app, you'd send an email here
+      console.log(`Password reset token for ${email}: ${token}`);
+      
+      res.json({ message: 'If that email exists, a reset link has been sent.' });
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      res.status(500).json({ message: 'Failed to process request' });
+    }
+  });
+
+  app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: 'Token and new password are required' });
+      }
+      
+      const resetToken = await storage.getPasswordResetToken(token);
+      if (!resetToken || resetToken.used || isPasswordResetTokenExpired(resetToken.expiresAt)) {
+        return res.status(400).json({ message: 'Invalid or expired reset token' });
+      }
+      
+      // Hash new password and update user
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updateUserPassword(resetToken.userId, hashedPassword);
+      
+      // Mark token as used
+      await storage.markTokenAsUsed(resetToken.id);
+      
+      res.json({ message: 'Password reset successfully' });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      res.status(500).json({ message: 'Failed to reset password' });
+    }
+  });
+
+  app.get('/api/auth/user', async (req: any, res) => {
+    try {
+      if (req.isAuthenticated() && req.user) {
+        // Check if it's a local user or Replit user
+        if (req.user.claims) {
+          // Replit Auth user
+          const userEmail = req.user.claims.email;
+          const allUsers = await storage.getAllUsers();
+          const user = allUsers.find((u: any) => u.email === userEmail);
+          res.json(user || null);
+        } else {
+          // Local auth user
+          res.json(req.user);
+        }
+      } else {
+        res.status(401).json({ message: 'Unauthorized' });
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      res.status(500).json({ message: 'Failed to fetch user' });
+    }
+  });
+
+  // Admin user management routes
+  app.get('/api/admin/users', async (req: any, res) => {
+    try {
+      const currentUser = req.user?.claims ? 
+        await storage.getUser(req.user.claims.sub) : 
+        req.user;
+      
+      if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      res.status(500).json({ message: 'Failed to fetch users' });
+    }
+  });
+
+  app.post('/api/admin/users', async (req: any, res) => {
+    try {
+      const currentUser = req.user?.claims ? 
+        await storage.getUser(req.user.claims.sub) : 
+        req.user;
+      
+      if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const { username, password, firstName, lastName, email, unitNumber, role, isOwner } = req.body;
+      
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(username.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+      
+      // Hash password
+      const hashedPassword = await hashPassword(password || 'Skymax123');
+      
+      const userData = {
+        username: username.toLowerCase(),
+        password: hashedPassword,
+        firstName,
+        lastName,
+        email,
+        unitNumber,
+        role: role || 'resident',
+        status: 'active' as const,
+        isOwner: isOwner ?? true,
+      };
+      
+      const user = await storage.createUser(userData);
+      res.status(201).json(user);
+    } catch (error) {
+      console.error('Error creating user:', error);
+      res.status(500).json({ message: 'Failed to create user' });
+    }
+  });
+
+  app.patch('/api/admin/users/:userId/status', async (req: any, res) => {
+    try {
+      const currentUser = req.user?.claims ? 
+        await storage.getUser(req.user.claims.sub) : 
+        req.user;
+      
+      if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'super_admin')) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+      
+      const { status } = req.body;
+      const updatedUser = await storage.updateUserStatus(req.params.userId, status);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error('Error updating user status:', error);
+      res.status(500).json({ message: 'Failed to update user status' });
+    }
+  });
+
+  // Legacy Replit auth routes (keeping for backward compatibility)
 
   // User management routes (Admin/Super Admin only)
   app.get('/api/users', isAuthenticated, async (req: any, res) => {
