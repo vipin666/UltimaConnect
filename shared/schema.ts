@@ -345,3 +345,107 @@ export type MaintenanceRequestWithUsers = MaintenanceRequest & {
 export type GuestNotificationWithUser = GuestNotification & {
   user: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber'>;
 };
+
+// Biometric access requests table
+export const biometricRequests = pgTable("biometric_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  requestType: varchar("request_type").notNull(), // 'fingerprint', 'facial', 'card'
+  reason: varchar("reason"), // Why requesting access
+  accessLevel: varchar("access_level").default('basic'), // 'basic', 'full', 'maintenance'
+  status: varchar("status").notNull().default('pending'), // 'pending', 'approved', 'rejected'
+  approvedBy: varchar("approved_by").references(() => users.id),
+  adminNotes: varchar("admin_notes"),
+  requestDate: timestamp("request_date").defaultNow(),
+  approvedDate: timestamp("approved_date"),
+  expiryDate: timestamp("expiry_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Tenant documents table
+export const tenantDocuments = pgTable("tenant_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  documentType: varchar("document_type").notNull(), // 'lease', 'id_proof', 'income_proof', 'photo', 'other'
+  documentName: varchar("document_name").notNull(),
+  filePath: varchar("file_path").notNull(), // Object storage path
+  fileSize: varchar("file_size"),
+  mimeType: varchar("mime_type"),
+  status: varchar("status").notNull().default('pending'), // 'pending', 'approved', 'rejected'
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  adminNotes: varchar("admin_notes"),
+  uploadDate: timestamp("upload_date").defaultNow(),
+  reviewDate: timestamp("review_date"),
+  expiryDate: timestamp("expiry_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations for biometric requests
+export const biometricRequestsRelations = relations(biometricRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [biometricRequests.userId],
+    references: [users.id],
+  }),
+  approver: one(users, {
+    fields: [biometricRequests.approvedBy],
+    references: [users.id],
+  }),
+}));
+
+// Relations for tenant documents
+export const tenantDocumentsRelations = relations(tenantDocuments, ({ one }) => ({
+  user: one(users, {
+    fields: [tenantDocuments.userId],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [tenantDocuments.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
+// New insert schemas
+export const insertBiometricRequestSchema = createInsertSchema(biometricRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  requestDate: true,
+  approvedDate: true,
+});
+
+export const insertTenantDocumentSchema = createInsertSchema(tenantDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  uploadDate: true,
+  reviewDate: true,
+});
+
+// New types
+export type BiometricRequest = typeof biometricRequests.$inferSelect;
+export type InsertBiometricRequest = z.infer<typeof insertBiometricRequestSchema>;
+export type TenantDocument = typeof tenantDocuments.$inferSelect;
+export type InsertTenantDocument = z.infer<typeof insertTenantDocumentSchema>;
+
+export type BiometricRequestWithUser = BiometricRequest & {
+  user: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber' | 'role'>;
+  approver?: Pick<User, 'id' | 'firstName' | 'lastName' | 'role'> | null;
+};
+
+export type TenantDocumentWithUser = TenantDocument & {
+  user: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber'>;
+  reviewer?: Pick<User, 'id' | 'firstName' | 'lastName' | 'role'> | null;
+};
+
+// Booking report types
+export type BookingReport = {
+  totalBookings: number;
+  activeBookings: number;
+  cancelledBookings: number;
+  completedBookings: number;
+  popularAmenities: { amenityName: string; bookingCount: number }[];
+  bookingsByMonth: { month: string; count: number }[];
+  recentBookings: BookingWithAmenity[];
+};

@@ -10,6 +10,9 @@ import { BookingModal } from "../bookings/BookingModal";
 import { WatchmanDashboard } from "../watchman/WatchmanDashboard";
 import { AdminDashboard } from "../admin/AdminDashboard";
 import { MessagingTab } from "../messaging/MessagingTab";
+import { BiometricAccessTab } from "../access/BiometricAccessTab";
+import { TenantDocumentsTab } from "../documents/TenantDocumentsTab";
+import { BookingReportsTab } from "../admin/BookingReportsTab";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -17,7 +20,7 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { Plus, AlertTriangle, Calendar, Settings } from "lucide-react";
+import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3 } from "lucide-react";
 import type { PostWithAuthor, Amenity, BookingWithAmenity } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -36,6 +39,7 @@ export function MobileLayout() {
   };
   
   const [activeTab, setActiveTab] = useState(getDefaultTab());
+  const [activeServiceTab, setActiveServiceTab] = useState<string>('overview');
   const [showPostModal, setShowPostModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedAmenity, setSelectedAmenity] = useState<{ id: string; name: string; type: string } | null>(null);
@@ -296,81 +300,172 @@ export function MobileLayout() {
     </div>
   );
 
-  const renderServicesTab = () => (
-    <div className="space-y-6 pb-24 px-4">
-      <h2 className="text-lg font-medium text-gray-800">Building Services</h2>
-      
-      {/* Admin Panel (Conditional) */}
-      {(user?.role === 'admin' || user?.role === 'super_admin') && (
-        <Card className="shadow-md border border-gray-200 bg-white">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium text-gray-800 flex items-center space-x-2">
-                <div className="w-8 h-8 bg-secondary bg-opacity-10 rounded-lg flex items-center justify-center">
-                  <Settings className="w-4 h-4 text-secondary" />
-                </div>
-                <span>Admin Panel</span>
-              </h3>
-            </div>
-            <Button 
-              onClick={() => window.location.href = '/admin'}
-              className="w-full bg-secondary text-white hover:bg-green-700 py-3 rounded-lg font-medium"
-              data-testid="button-admin-panel"
-            >
-              Access Admin Panel
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+  const renderServicesTab = () => {
+    // Define service tabs based on user role
+    const getServiceTabs = () => {
+      const baseTabs = [
+        { id: 'overview', label: 'Overview', icon: Settings },
+        { id: 'biometric', label: 'Biometric', icon: Fingerprint },
+        { id: 'documents', label: 'Documents', icon: FileText },
+      ];
 
-      {/* Emergency Contacts */}
-      <Card className="shadow-md border border-gray-200 bg-white">
-        <CardContent className="p-4">
-          <h3 className="font-medium text-gray-800 mb-4">Emergency Contacts</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-primary bg-opacity-10 rounded-full flex items-center justify-center">
-                  <span className="text-primary text-sm font-semibold">S</span>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-800">Security Desk</span>
-                  <p className="text-xs text-gray-500">24/7 Available</p>
-                </div>
-              </div>
-              <Button 
-                size="sm" 
-                className="bg-primary text-white hover:bg-blue-700 px-4 py-2 rounded-md"
-                onClick={() => window.location.href = 'tel:+1234567890'}
-                data-testid="button-call-security"
+      // Add reports tab for admins
+      if (user?.role === 'admin' || user?.role === 'super_admin') {
+        baseTabs.push({ id: 'reports', label: 'Reports', icon: BarChart3 });
+      }
+
+      return baseTabs;
+    };
+
+    const serviceTabs = getServiceTabs();
+
+    return (
+      <div className="pb-24">
+        {/* Service Tab Navigation */}
+        <div className="sticky top-0 bg-white z-10 border-b">
+          <div className="flex overflow-x-auto px-4 py-2">
+            {serviceTabs.map(({ id, label, icon: Icon }) => (
+              <Button
+                key={id}
+                variant="ghost"
+                onClick={() => setActiveServiceTab(id)}
+                className={`flex items-center gap-2 px-4 py-2 whitespace-nowrap mr-2 transition-all ${
+                  activeServiceTab === id
+                    ? 'text-primary bg-blue-50 border-b-2 border-primary'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                data-testid={`service-tab-${id}`}
               >
-                Call
+                <Icon className="w-4 h-4" />
+                {label}
               </Button>
-            </div>
-            <div className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-secondary bg-opacity-10 rounded-full flex items-center justify-center">
-                  <span className="text-secondary text-sm font-semibold">M</span>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-800">Maintenance</span>
-                  <p className="text-xs text-gray-500">9 AM - 6 PM</p>
-                </div>
-              </div>
-              <Button 
-                size="sm" 
-                className="bg-secondary text-white hover:bg-green-700 px-4 py-2 rounded-md"
-                onClick={() => window.location.href = 'tel:+1234567891'}
-                data-testid="button-call-maintenance"
-              >
-                Call
-              </Button>
-            </div>
+            ))}
           </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+        </div>
+
+        {/* Service Tab Content */}
+        <div className="px-4 pt-4">
+          {activeServiceTab === 'overview' && (
+            <div className="space-y-6">
+              <h2 className="text-lg font-medium text-gray-800">Building Services</h2>
+              
+              {/* Admin Panel (Conditional) */}
+              {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                <Card className="shadow-md border border-gray-200 bg-white">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-medium text-gray-800 flex items-center space-x-2">
+                        <div className="w-8 h-8 bg-secondary bg-opacity-10 rounded-lg flex items-center justify-center">
+                          <Settings className="w-4 h-4 text-secondary" />
+                        </div>
+                        <span>Admin Panel</span>
+                      </h3>
+                    </div>
+                    <Button 
+                      onClick={() => window.location.href = '/admin'}
+                      className="w-full bg-secondary text-white hover:bg-green-700 py-3 rounded-lg font-medium"
+                      data-testid="button-admin-panel"
+                    >
+                      Access Admin Panel
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Quick Service Access */}
+              <Card className="shadow-md border border-gray-200 bg-white">
+                <CardContent className="p-4">
+                  <h3 className="font-medium text-gray-800 mb-4">Quick Access</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveServiceTab('biometric')}
+                      className="flex flex-col items-center p-4 h-auto"
+                      data-testid="button-quick-biometric"
+                    >
+                      <Fingerprint className="w-6 h-6 mb-2 text-blue-600" />
+                      <span className="text-sm">Biometric Access</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveServiceTab('documents')}
+                      className="flex flex-col items-center p-4 h-auto"
+                      data-testid="button-quick-documents"
+                    >
+                      <FileText className="w-6 h-6 mb-2 text-green-600" />
+                      <span className="text-sm">Documents</span>
+                    </Button>
+                    {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveServiceTab('reports')}
+                        className="flex flex-col items-center p-4 h-auto"
+                        data-testid="button-quick-reports"
+                      >
+                        <BarChart3 className="w-6 h-6 mb-2 text-purple-600" />
+                        <span className="text-sm">Reports</span>
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Emergency Contacts */}
+              <Card className="shadow-md border border-gray-200 bg-white">
+                <CardContent className="p-4">
+                  <h3 className="font-medium text-gray-800 mb-4">Emergency Contacts</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-primary bg-opacity-10 rounded-full flex items-center justify-center">
+                          <span className="text-primary text-sm font-semibold">S</span>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-800">Security Desk</span>
+                          <p className="text-xs text-gray-500">24/7 Available</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="bg-primary text-white hover:bg-blue-700 px-4 py-2 rounded-md"
+                        onClick={() => window.location.href = 'tel:+1234567890'}
+                        data-testid="button-call-security"
+                      >
+                        Call
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-secondary bg-opacity-10 rounded-full flex items-center justify-center">
+                          <span className="text-secondary text-sm font-semibold">M</span>
+                        </div>
+                        <div>
+                          <span className="text-sm font-medium text-gray-800">Maintenance</span>
+                          <p className="text-xs text-gray-500">9 AM - 6 PM</p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        className="bg-secondary text-white hover:bg-green-700 px-4 py-2 rounded-md"
+                        onClick={() => window.location.href = 'tel:+1234567891'}
+                        data-testid="button-call-maintenance"
+                      >
+                        Call
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeServiceTab === 'biometric' && <BiometricAccessTab />}
+          {activeServiceTab === 'documents' && <TenantDocumentsTab />}
+          {activeServiceTab === 'reports' && (user?.role === 'admin' || user?.role === 'super_admin') && <BookingReportsTab />}
+        </div>
+      </div>
+    );
+  };
 
   if (!user) {
     return (

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema, insertMessageSchema, insertAnnouncementSchema, insertMaintenanceRequestSchema } from "@shared/schema";
+import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema, insertMessageSchema, insertAnnouncementSchema, insertMaintenanceRequestSchema, insertBiometricRequestSchema, insertTenantDocumentSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -486,6 +486,162 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating maintenance request status:", error);
       res.status(500).json({ message: "Failed to update maintenance request status" });
+    }
+  });
+
+  // Get booking reports (admin only)
+  app.get("/api/booking-reports", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const report = await storage.getBookingReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching booking reports:", error);
+      res.status(500).json({ message: "Failed to fetch booking reports" });
+    }
+  });
+
+  // Biometric request routes
+  app.get("/api/biometric-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      let requests;
+      if (['admin', 'super_admin'].includes(user.role)) {
+        // Admins can see all requests
+        requests = await storage.getBiometricRequests();
+      } else {
+        // Regular users can only see their own requests
+        requests = await storage.getBiometricRequestsByUserId(userId);
+      }
+      
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching biometric requests:", error);
+      res.status(500).json({ message: "Failed to fetch biometric requests" });
+    }
+  });
+
+  app.post("/api/biometric-requests", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const validatedData = insertBiometricRequestSchema.parse({
+        ...req.body,
+        userId,
+      });
+      
+      const request = await storage.createBiometricRequest(validatedData);
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating biometric request:", error);
+      res.status(500).json({ message: "Failed to create biometric request" });
+    }
+  });
+
+  app.put("/api/biometric-requests/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updates = {
+        ...req.body,
+        approvedBy: userId,
+        approvedDate: req.body.status === 'approved' ? new Date() : null,
+      };
+      
+      const request = await storage.updateBiometricRequest(req.params.id, updates);
+      if (!request) {
+        return res.status(404).json({ message: "Biometric request not found" });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      console.error("Error updating biometric request:", error);
+      res.status(500).json({ message: "Failed to update biometric request" });
+    }
+  });
+
+  // Tenant document routes
+  app.get("/api/tenant-documents", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      let documents;
+      if (['admin', 'super_admin'].includes(user.role)) {
+        // Admins can see all documents
+        documents = await storage.getTenantDocuments();
+      } else {
+        // Regular users can only see their own documents
+        documents = await storage.getTenantDocumentsByUserId(userId);
+      }
+      
+      res.json(documents);
+    } catch (error) {
+      console.error("Error fetching tenant documents:", error);
+      res.status(500).json({ message: "Failed to fetch tenant documents" });
+    }
+  });
+
+  app.post("/api/tenant-documents", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const validatedData = insertTenantDocumentSchema.parse({
+        ...req.body,
+        userId,
+      });
+      
+      const document = await storage.createTenantDocument(validatedData);
+      res.status(201).json(document);
+    } catch (error) {
+      console.error("Error creating tenant document:", error);
+      res.status(500).json({ message: "Failed to create tenant document" });
+    }
+  });
+
+  app.put("/api/tenant-documents/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const updates = {
+        ...req.body,
+        reviewedBy: userId,
+        reviewDate: new Date(),
+      };
+      
+      const document = await storage.updateTenantDocument(req.params.id, updates);
+      if (!document) {
+        return res.status(404).json({ message: "Tenant document not found" });
+      }
+      
+      res.json(document);
+    } catch (error) {
+      console.error("Error updating tenant document:", error);
+      res.status(500).json({ message: "Failed to update tenant document" });
     }
   });
 

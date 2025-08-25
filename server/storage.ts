@@ -8,6 +8,8 @@ import {
   messages,
   announcements,
   maintenanceRequests,
+  biometricRequests,
+  tenantDocuments,
   type User,
   type UpsertUser,
   type Post,
@@ -31,6 +33,13 @@ import {
   type MaintenanceRequest,
   type InsertMaintenanceRequest,
   type MaintenanceRequestWithUsers,
+  type BiometricRequest,
+  type BiometricRequestWithUser,
+  type InsertBiometricRequest,
+  type TenantDocument,
+  type TenantDocumentWithUser,
+  type InsertTenantDocument,
+  type BookingReport,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
@@ -87,6 +96,21 @@ export interface IStorage {
   getUserMaintenanceRequests(userId: string): Promise<MaintenanceRequestWithUsers[]>;
   getAllMaintenanceRequests(): Promise<MaintenanceRequestWithUsers[]>;
   updateMaintenanceRequestStatus(requestId: string, status: string, assignedTo?: string): Promise<MaintenanceRequest>;
+  
+  // Biometric request operations
+  createBiometricRequest(request: InsertBiometricRequest): Promise<BiometricRequest>;
+  getBiometricRequests(): Promise<BiometricRequestWithUser[]>;
+  getBiometricRequestsByUserId(userId: string): Promise<BiometricRequestWithUser[]>;
+  updateBiometricRequest(id: string, updates: Partial<BiometricRequest>): Promise<BiometricRequest | undefined>;
+  
+  // Tenant document operations
+  createTenantDocument(document: InsertTenantDocument): Promise<TenantDocument>;
+  getTenantDocuments(): Promise<TenantDocumentWithUser[]>;
+  getTenantDocumentsByUserId(userId: string): Promise<TenantDocumentWithUser[]>;
+  updateTenantDocument(id: string, updates: Partial<TenantDocument>): Promise<TenantDocument | undefined>;
+  
+  // Booking report operations
+  getBookingReport(): Promise<BookingReport>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -705,6 +729,261 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, userId))
       .returning();
     return updatedUser;
+  }
+
+  // Biometric request operations
+  async getBiometricRequests(): Promise<BiometricRequestWithUser[]> {
+    const requests = await db.select({
+      id: biometricRequests.id,
+      userId: biometricRequests.userId,
+      requestType: biometricRequests.requestType,
+      reason: biometricRequests.reason,
+      accessLevel: biometricRequests.accessLevel,
+      status: biometricRequests.status,
+      approvedBy: biometricRequests.approvedBy,
+      adminNotes: biometricRequests.adminNotes,
+      requestDate: biometricRequests.requestDate,
+      approvedDate: biometricRequests.approvedDate,
+      expiryDate: biometricRequests.expiryDate,
+      createdAt: biometricRequests.createdAt,
+      updatedAt: biometricRequests.updatedAt,
+      user: {
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        unitNumber: users.unitNumber,
+        role: users.role,
+      },
+    })
+    .from(biometricRequests)
+    .leftJoin(users, eq(biometricRequests.userId, users.id))
+    .orderBy(desc(biometricRequests.createdAt));
+
+    return requests as BiometricRequestWithUser[];
+  }
+
+  async getBiometricRequestsByUserId(userId: string): Promise<BiometricRequestWithUser[]> {
+    const requests = await db.select({
+      id: biometricRequests.id,
+      userId: biometricRequests.userId,
+      requestType: biometricRequests.requestType,
+      reason: biometricRequests.reason,
+      accessLevel: biometricRequests.accessLevel,
+      status: biometricRequests.status,
+      approvedBy: biometricRequests.approvedBy,
+      adminNotes: biometricRequests.adminNotes,
+      requestDate: biometricRequests.requestDate,
+      approvedDate: biometricRequests.approvedDate,
+      expiryDate: biometricRequests.expiryDate,
+      createdAt: biometricRequests.createdAt,
+      updatedAt: biometricRequests.updatedAt,
+      user: {
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        unitNumber: users.unitNumber,
+        role: users.role,
+      },
+    })
+    .from(biometricRequests)
+    .leftJoin(users, eq(biometricRequests.userId, users.id))
+    .where(eq(biometricRequests.userId, userId))
+    .orderBy(desc(biometricRequests.createdAt));
+
+    return requests as BiometricRequestWithUser[];
+  }
+
+  async createBiometricRequest(request: InsertBiometricRequest): Promise<BiometricRequest> {
+    const [newRequest] = await db
+      .insert(biometricRequests)
+      .values(request)
+      .returning();
+    return newRequest;
+  }
+
+  async updateBiometricRequest(id: string, updates: Partial<BiometricRequest>): Promise<BiometricRequest | undefined> {
+    const [updated] = await db
+      .update(biometricRequests)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(biometricRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Tenant document operations
+  async getTenantDocuments(): Promise<TenantDocumentWithUser[]> {
+    const documents = await db.select({
+      id: tenantDocuments.id,
+      userId: tenantDocuments.userId,
+      documentType: tenantDocuments.documentType,
+      documentName: tenantDocuments.documentName,
+      filePath: tenantDocuments.filePath,
+      fileSize: tenantDocuments.fileSize,
+      mimeType: tenantDocuments.mimeType,
+      status: tenantDocuments.status,
+      reviewedBy: tenantDocuments.reviewedBy,
+      adminNotes: tenantDocuments.adminNotes,
+      uploadDate: tenantDocuments.uploadDate,
+      reviewDate: tenantDocuments.reviewDate,
+      expiryDate: tenantDocuments.expiryDate,
+      createdAt: tenantDocuments.createdAt,
+      updatedAt: tenantDocuments.updatedAt,
+      user: {
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        unitNumber: users.unitNumber,
+      },
+    })
+    .from(tenantDocuments)
+    .leftJoin(users, eq(tenantDocuments.userId, users.id))
+    .orderBy(desc(tenantDocuments.createdAt));
+
+    return documents as TenantDocumentWithUser[];
+  }
+
+  async getTenantDocumentsByUserId(userId: string): Promise<TenantDocumentWithUser[]> {
+    const documents = await db.select({
+      id: tenantDocuments.id,
+      userId: tenantDocuments.userId,
+      documentType: tenantDocuments.documentType,
+      documentName: tenantDocuments.documentName,
+      filePath: tenantDocuments.filePath,
+      fileSize: tenantDocuments.fileSize,
+      mimeType: tenantDocuments.mimeType,
+      status: tenantDocuments.status,
+      reviewedBy: tenantDocuments.reviewedBy,
+      adminNotes: tenantDocuments.adminNotes,
+      uploadDate: tenantDocuments.uploadDate,
+      reviewDate: tenantDocuments.reviewDate,
+      expiryDate: tenantDocuments.expiryDate,
+      createdAt: tenantDocuments.createdAt,
+      updatedAt: tenantDocuments.updatedAt,
+      user: {
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        unitNumber: users.unitNumber,
+      },
+    })
+    .from(tenantDocuments)
+    .leftJoin(users, eq(tenantDocuments.userId, users.id))
+    .where(eq(tenantDocuments.userId, userId))
+    .orderBy(desc(tenantDocuments.createdAt));
+
+    return documents as TenantDocumentWithUser[];
+  }
+
+  async createTenantDocument(document: InsertTenantDocument): Promise<TenantDocument> {
+    const [newDocument] = await db
+      .insert(tenantDocuments)
+      .values(document)
+      .returning();
+    return newDocument;
+  }
+
+  async updateTenantDocument(id: string, updates: Partial<TenantDocument>): Promise<TenantDocument | undefined> {
+    const [updated] = await db
+      .update(tenantDocuments)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tenantDocuments.id, id))
+      .returning();
+    return updated;
+  }
+
+  // Booking report operations
+  async getBookingReport(): Promise<BookingReport> {
+    // Get total bookings count
+    const totalBookingsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookings);
+    const totalBookings = totalBookingsResult[0]?.count || 0;
+
+    // Get bookings by status
+    const activeBookingsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookings)
+      .where(eq(bookings.status, 'confirmed'));
+    const activeBookings = activeBookingsResult[0]?.count || 0;
+
+    const cancelledBookingsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookings)
+      .where(eq(bookings.status, 'cancelled'));
+    const cancelledBookings = cancelledBookingsResult[0]?.count || 0;
+
+    const completedBookingsResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookings)
+      .where(eq(bookings.status, 'completed'));
+    const completedBookings = completedBookingsResult[0]?.count || 0;
+
+    // Get popular amenities
+    const popularAmenitiesResult = await db
+      .select({
+        amenityName: amenities.name,
+        bookingCount: sql<number>`count(${bookings.id})`,
+      })
+      .from(bookings)
+      .leftJoin(amenities, eq(bookings.amenityId, amenities.id))
+      .groupBy(amenities.name)
+      .orderBy(desc(sql`count(${bookings.id})`))
+      .limit(5);
+
+    // Get bookings by month (last 12 months)
+    const bookingsByMonthResult = await db
+      .select({
+        month: sql<string>`TO_CHAR(${bookings.createdAt}, 'YYYY-MM')`,
+        count: sql<number>`count(*)`,
+      })
+      .from(bookings)
+      .where(gte(bookings.createdAt, sql`NOW() - INTERVAL '12 months'`))
+      .groupBy(sql`TO_CHAR(${bookings.createdAt}, 'YYYY-MM')`)
+      .orderBy(sql`TO_CHAR(${bookings.createdAt}, 'YYYY-MM')`);
+
+    // Get recent bookings (last 10)
+    const recentBookingsResult = await db
+      .select({
+        id: bookings.id,
+        amenityId: bookings.amenityId,
+        userId: bookings.userId,
+        bookingDate: bookings.bookingDate,
+        startTime: bookings.startTime,
+        endTime: bookings.endTime,
+        status: bookings.status,
+        notes: bookings.notes,
+        createdAt: bookings.createdAt,
+        amenity: amenities,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          unitNumber: users.unitNumber,
+        }
+      })
+      .from(bookings)
+      .leftJoin(amenities, eq(bookings.amenityId, amenities.id))
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .orderBy(desc(bookings.createdAt))
+      .limit(10);
+
+    const recentBookings = recentBookingsResult.filter(result => result.amenity !== null) as BookingWithAmenity[];
+
+    return {
+      totalBookings,
+      activeBookings,
+      cancelledBookings,
+      completedBookings,
+      popularAmenities: popularAmenitiesResult.map(item => ({
+        amenityName: item.amenityName || 'Unknown',
+        bookingCount: item.bookingCount,
+      })),
+      bookingsByMonth: bookingsByMonthResult.map(item => ({
+        month: item.month,
+        count: item.count,
+      })),
+      recentBookings,
+    };
   }
 }
 
