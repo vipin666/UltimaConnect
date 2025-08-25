@@ -117,32 +117,31 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
               </div>
             )}
             
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4 text-sm">
+            <div className="flex items-center justify-start pt-2 border-t border-gray-100">
+              <div className="flex items-center space-x-6">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => onLike(post.id)}
                   disabled={isLiking}
-                  className="text-primary hover:text-primary hover:bg-blue-50 p-1 h-auto"
+                  className="text-primary hover:text-primary hover:bg-blue-50 px-2 py-1 h-8 rounded-md transition-colors"
                   data-testid={`button-like-${post.id}`}
                 >
-                  <ThumbsUp className="w-4 h-4 mr-1" />
-                  {post.likes} Likes
+                  <ThumbsUp className="w-4 h-4 mr-2" />
+                  <span className="text-sm">{post.likes}</span>
                 </Button>
                 
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => onComment(post.id)}
-                  className="text-gray-600 hover:text-gray-800 hover:bg-gray-50 p-1 h-auto"
+                  className="text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-2 py-1 h-8 rounded-md transition-colors"
                   data-testid={`button-comment-${post.id}`}
                 >
-                  <MessageCircle className="w-4 h-4 mr-1" />
-                  {post.comments.length} Comments
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  <span className="text-sm">{post.comments.length}</span>
                 </Button>
               </div>
-              
             </div>
           </div>
         </div>

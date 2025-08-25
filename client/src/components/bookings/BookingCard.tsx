@@ -84,26 +84,32 @@ export function BookingCard({ amenity, onBook }: BookingCardProps) {
   return (
     <Card className="shadow-material border border-gray-200" data-testid={`amenity-${amenity.id}`}>
       <CardContent className="p-4">
-        <div className="flex items-center space-x-3 mb-3">
-          <div className={`w-12 h-12 ${getAmenityIconBg(amenity.type)} rounded-lg flex items-center justify-center`}>
+        <div className="flex items-start space-x-3">
+          <div className={`w-12 h-12 ${getAmenityIconBg(amenity.type)} rounded-lg flex items-center justify-center flex-shrink-0`}>
             {getAmenityIcon(amenity.type)}
           </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-gray-800" data-testid={`text-name-${amenity.id}`}>
-              {amenity.name}
-            </h3>
-            <p className="text-gray-500 text-sm flex items-center">
-              <MapPin className="w-3 h-3 mr-1" />
-              {amenity.location} • <Clock className="w-3 h-3 ml-1 mr-1" /> {details.hours}
-            </p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex-1 pr-3">
+                <h3 className="font-medium text-gray-800 mb-1" data-testid={`text-name-${amenity.id}`}>
+                  {amenity.name}
+                </h3>
+                <p className="text-gray-500 text-sm flex items-center flex-wrap">
+                  <MapPin className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="mr-2">{amenity.location}</span>
+                  <Clock className="w-3 h-3 mr-1 flex-shrink-0" /> 
+                  <span>{details.hours}</span>
+                </p>
+              </div>
+              <Button 
+                onClick={() => onBook(amenity.id, amenity.type)}
+                className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 flex-shrink-0"
+                data-testid={`button-book-${amenity.id}`}
+              >
+                Book Now
+              </Button>
+            </div>
           </div>
-          <Button 
-            onClick={() => onBook(amenity.id, amenity.type)}
-            className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700"
-            data-testid={`button-book-${amenity.id}`}
-          >
-            Book Now
-          </Button>
         </div>
         
         <div className="text-xs text-gray-500 flex items-start">
