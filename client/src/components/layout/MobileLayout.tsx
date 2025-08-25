@@ -7,6 +7,9 @@ import { PostCard } from "../community/PostCard";
 import { PostModal } from "../community/PostModal";
 import { BookingCard } from "../bookings/BookingCard";
 import { BookingModal } from "../bookings/BookingModal";
+import { WatchmanDashboard } from "../watchman/WatchmanDashboard";
+import { AdminDashboard } from "../admin/AdminDashboard";
+import { MessagingTab } from "../messaging/MessagingTab";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -20,7 +23,19 @@ import { format } from "date-fns";
 
 export function MobileLayout() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('community');
+  
+  // Set default tab based on user role
+  const getDefaultTab = () => {
+    if (!user) return 'community';
+    switch (user.role) {
+      case 'watchman': return 'watchman';
+      case 'admin':
+      case 'super_admin': return 'admin';
+      default: return 'community';
+    }
+  };
+  
+  const [activeTab, setActiveTab] = useState(getDefaultTab());
   const [showPostModal, setShowPostModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [selectedAmenity, setSelectedAmenity] = useState<{ id: string; name: string; type: string } | null>(null);
@@ -409,12 +424,15 @@ export function MobileLayout() {
         <div className="pt-4">
           {activeTab === 'community' && renderCommunityTab()}
           {activeTab === 'bookings' && renderBookingsTab()}
+          {activeTab === 'messages' && <MessagingTab />}
           {activeTab === 'services' && renderServicesTab()}
+          {activeTab === 'watchman' && user?.role === 'watchman' && <WatchmanDashboard />}
+          {activeTab === 'admin' && (user?.role === 'admin' || user?.role === 'super_admin') && <AdminDashboard />}
         </div>
       </div>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} userRole={user?.role} />
 
       {/* Modals */}
       <PostModal open={showPostModal} onOpenChange={setShowPostModal} />

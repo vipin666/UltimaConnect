@@ -1,17 +1,42 @@
 import { Button } from "@/components/ui/button";
-import { Home, Calendar, Settings } from "lucide-react";
+import { Home, Calendar, Settings, Shield, Users, MessageSquare } from "lucide-react";
 
 interface BottomNavProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  userRole?: string;
 }
 
-export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
-  const tabs = [
-    { id: 'community', label: 'Community', icon: Home },
-    { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'services', label: 'Services', icon: Settings },
-  ];
+export function BottomNav({ activeTab, onTabChange, userRole }: BottomNavProps) {
+  // Define navigation tabs based on user role
+  const getTabs = () => {
+    if (userRole === 'watchman') {
+      return [
+        { id: 'watchman', label: 'Dashboard', icon: Shield },
+        { id: 'community', label: 'Community', icon: Home },
+        { id: 'services', label: 'Services', icon: Settings },
+      ];
+    }
+
+    if (userRole === 'admin' || userRole === 'super_admin') {
+      return [
+        { id: 'admin', label: 'Admin', icon: Users },
+        { id: 'community', label: 'Community', icon: Home },
+        { id: 'messages', label: 'Messages', icon: MessageSquare },
+        { id: 'services', label: 'Services', icon: Settings },
+      ];
+    }
+
+    // Regular resident navigation
+    return [
+      { id: 'community', label: 'Community', icon: Home },
+      { id: 'bookings', label: 'Bookings', icon: Calendar },
+      { id: 'messages', label: 'Messages', icon: MessageSquare },
+      { id: 'services', label: 'Services', icon: Settings },
+    ];
+  };
+
+  const tabs = getTabs();
 
   return (
     <nav className="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-md bg-white border-t border-gray-200 shadow-lg z-50">

@@ -117,7 +117,47 @@ export const guestNotifications = pgTable("guest_notifications", {
   departureTime: timestamp("departure_time"),
   parkingSlot: varchar("parking_slot", { length: 10 }),
   isActive: boolean("is_active").default(true).notNull(),
+  watchmanApproved: boolean("watchman_approved").default(false).notNull(),
+  watchmanNotes: text("watchman_notes"),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Direct messages table
+export const messages = pgTable("messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  senderId: varchar("sender_id").notNull().references(() => users.id),
+  receiverId: varchar("receiver_id").notNull().references(() => users.id),
+  content: text("content").notNull(),
+  isRead: boolean("is_read").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Announcements table (for admin/committee broadcasts)
+export const announcements = pgTable("announcements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  authorId: varchar("author_id").notNull().references(() => users.id),
+  targetRoles: text("target_roles").array().default(['resident']).notNull(), // ['resident', 'watchman', 'admin']
+  isUrgent: boolean("is_urgent").default(false).notNull(),
+  expiresAt: timestamp("expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Maintenance requests table
+export const maintenanceRequests = pgTable("maintenance_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  category: varchar("category", { length: 50 }).notNull(), // 'plumbing', 'electrical', 'general', etc.
+  priority: varchar("priority", { length: 20 }).default('medium').notNull(), // 'low', 'medium', 'high', 'urgent'
+  status: varchar("status", { length: 20 }).default('pending').notNull(), // 'pending', 'assigned', 'in_progress', 'completed', 'cancelled'
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  unitNumber: varchar("unit_number", { length: 10 }),
+  preferredTime: varchar("preferred_time", { length: 100 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Relations
@@ -134,6 +174,11 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   comments: many(comments),
   bookings: many(bookings),
   guestNotifications: many(guestNotifications),
+  sentMessages: many(messages, { relationName: "sender" }),
+  receivedMessages: many(messages, { relationName: "receiver" }),
+  announcements: many(announcements),
+  maintenanceRequests: many(maintenanceRequests, { relationName: "requester" }),
+  assignedMaintenanceRequests: many(maintenanceRequests, { relationName: "assignee" }),
 }));
 
 export const postsRelations = relations(posts, ({ one, many }) => ({
@@ -173,6 +218,39 @@ export const guestNotificationsRelations = relations(guestNotifications, ({ one 
   }),
 }));
 
+export const messagesRelations = relations(messages, ({ one }) => ({
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
+    relationName: "sender",
+  }),
+  receiver: one(users, {
+    fields: [messages.receiverId],
+    references: [users.id],
+    relationName: "receiver",
+  }),
+}));
+
+export const announcementsRelations = relations(announcements, ({ one }) => ({
+  author: one(users, {
+    fields: [announcements.authorId],
+    references: [users.id],
+  }),
+}));
+
+export const maintenanceRequestsRelations = relations(maintenanceRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [maintenanceRequests.userId],
+    references: [users.id],
+    relationName: "requester",
+  }),
+  assignee: one(users, {
+    fields: [maintenanceRequests.assignedTo],
+    references: [users.id],
+    relationName: "assignee",
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -202,6 +280,22 @@ export const insertGuestNotificationSchema = createInsertSchema(guestNotificatio
   createdAt: true,
 });
 
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -214,6 +308,12 @@ export type InsertBooking = z.infer<typeof insertBookingSchema>;
 export type Booking = typeof bookings.$inferSelect;
 export type InsertGuestNotification = z.infer<typeof insertGuestNotificationSchema>;
 export type GuestNotification = typeof guestNotifications.$inferSelect;
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+export type Message = typeof messages.$inferSelect;
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSchema>;
+export type MaintenanceRequest = typeof maintenanceRequests.$inferSelect;
 
 // Extended types for API responses
 export type PostWithAuthor = Post & {
@@ -225,5 +325,23 @@ export type PostWithAuthor = Post & {
 
 export type BookingWithAmenity = Booking & {
   amenity: Amenity;
+  user: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber'>;
+};
+
+export type MessageWithUsers = Message & {
+  sender: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber' | 'role'>;
+  receiver: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber' | 'role'>;
+};
+
+export type AnnouncementWithAuthor = Announcement & {
+  author: Pick<User, 'id' | 'firstName' | 'lastName' | 'role'>;
+};
+
+export type MaintenanceRequestWithUsers = MaintenanceRequest & {
+  user: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber'>;
+  assignee?: Pick<User, 'id' | 'firstName' | 'lastName' | 'role'> | null;
+};
+
+export type GuestNotificationWithUser = GuestNotification & {
   user: Pick<User, 'id' | 'firstName' | 'lastName' | 'unitNumber'>;
 };

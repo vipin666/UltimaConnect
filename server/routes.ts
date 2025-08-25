@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema } from "@shared/schema";
+import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema, insertMessageSchema, insertAnnouncementSchema, insertMaintenanceRequestSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -245,11 +245,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Guest notification routes (Watchman only)
+  // Guest notification routes (Enhanced for Watchman features)
   app.get('/api/guest-notifications', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const notifications = await storage.getUserGuestNotifications(userId);
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      let notifications;
+      if (user.role === 'watchman') {
+        // Watchman sees all active guest notifications
+        notifications = await storage.getAllActiveGuestNotifications();
+      } else {
+        // Residents see only their own notifications
+        notifications = await storage.getUserGuestNotifications(userId);
+      }
+      
       res.json(notifications);
     } catch (error) {
       console.error("Error fetching guest notifications:", error);
@@ -293,6 +307,185 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating guest notification:", error);
       res.status(500).json({ message: "Failed to update guest notification" });
+    }
+  });
+
+  app.patch('/api/guest-notifications/:notificationId/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { notificationId } = req.params;
+      const { approved, notes } = req.body;
+      
+      const user = await storage.getUser(userId);
+      
+      if (!user || user.role !== 'watchman') {
+        return res.status(403).json({ message: "Unauthorized - Watchman access required" });
+      }
+      
+      const updatedNotification = await storage.updateGuestNotification(notificationId, {
+        watchmanApproved: approved,
+        watchmanNotes: notes,
+      });
+      
+      res.json(updatedNotification);
+    } catch (error) {
+      console.error("Error updating guest notification:", error);
+      res.status(500).json({ message: "Failed to update guest notification" });
+    }
+  });
+
+  // Messages endpoints
+  app.get('/api/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const messages = await storage.getUserMessages(userId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      res.status(500).json({ message: "Failed to fetch messages" });
+    }
+  });
+
+  app.post('/api/messages', isAuthenticated, async (req: any, res) => {
+    try {
+      const senderId = req.user.claims.sub;
+      const messageData = insertMessageSchema.parse({
+        ...req.body,
+        senderId,
+      });
+      
+      const message = await storage.createMessage(messageData);
+      res.json(message);
+    } catch (error) {
+      console.error("Error creating message:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid message data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create message" });
+    }
+  });
+
+  app.patch('/api/messages/:messageId/read', isAuthenticated, async (req: any, res) => {
+    try {
+      const { messageId } = req.params;
+      const message = await storage.markMessageAsRead(messageId);
+      res.json(message);
+    } catch (error) {
+      console.error("Error marking message as read:", error);
+      res.status(500).json({ message: "Failed to mark message as read" });
+    }
+  });
+
+  // Announcements endpoints
+  app.get('/api/announcements', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const announcements = await storage.getAnnouncementsForRole(user.role);
+      res.json(announcements);
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+      res.status(500).json({ message: "Failed to fetch announcements" });
+    }
+  });
+
+  app.post('/api/announcements', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const announcementData = insertAnnouncementSchema.parse({
+        ...req.body,
+        authorId: userId,
+      });
+      
+      const announcement = await storage.createAnnouncement(announcementData);
+      res.json(announcement);
+    } catch (error) {
+      console.error("Error creating announcement:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid announcement data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create announcement" });
+    }
+  });
+
+  // Maintenance requests endpoints
+  app.get('/api/maintenance-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      let requests;
+      if (user.role === 'admin' || user.role === 'super_admin') {
+        requests = await storage.getAllMaintenanceRequests();
+      } else {
+        requests = await storage.getUserMaintenanceRequests(userId);
+      }
+      
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching maintenance requests:", error);
+      res.status(500).json({ message: "Failed to fetch maintenance requests" });
+    }
+  });
+
+  app.post('/api/maintenance-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const requestData = insertMaintenanceRequestSchema.parse({
+        ...req.body,
+        userId,
+        unitNumber: user.unitNumber,
+      });
+      
+      const request = await storage.createMaintenanceRequest(requestData);
+      res.json(request);
+    } catch (error) {
+      console.error("Error creating maintenance request:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid maintenance request data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create maintenance request" });
+    }
+  });
+
+  app.patch('/api/maintenance-requests/:requestId/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { requestId } = req.params;
+      const { status, assignedTo } = req.body;
+      
+      const user = await storage.getUser(userId);
+      
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      const updatedRequest = await storage.updateMaintenanceRequestStatus(requestId, status, assignedTo);
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error("Error updating maintenance request status:", error);
+      res.status(500).json({ message: "Failed to update maintenance request status" });
     }
   });
 
