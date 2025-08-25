@@ -9,6 +9,8 @@ import Home from "@/pages/home";
 import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import FinancialPage from "@/pages/financial-page";
+import MyFeesPage from "@/pages/my-fees-page";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -35,6 +37,8 @@ function Router() {
         <>
           <Route path="/" component={Home} />
           <Route path="/admin" component={Admin} />
+          <Route path="/financial" component={FinancialPage} />
+          <Route path="/my-fees" component={MyFeesPage} />
           <Route path="/auth" component={AuthPage} />
         </>
       )}

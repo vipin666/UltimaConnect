@@ -892,6 +892,233 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Financial Management Routes
+  
+  // Fee Types
+  app.get('/api/fee-types', isAuthenticated, async (req, res) => {
+    try {
+      const feeTypes = await storage.getAllFeeTypes();
+      res.json(feeTypes);
+    } catch (error) {
+      console.error('Error fetching fee types:', error);
+      res.status(500).json({ message: 'Failed to fetch fee types' });
+    }
+  });
+
+  app.post('/api/fee-types', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      const feeType = await storage.createFeeType(req.body);
+      res.status(201).json(feeType);
+    } catch (error) {
+      console.error('Error creating fee type:', error);
+      res.status(500).json({ message: 'Failed to create fee type' });
+    }
+  });
+
+  app.put('/api/fee-types/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      const feeType = await storage.updateFeeType(req.params.id, req.body);
+      res.json(feeType);
+    } catch (error) {
+      console.error('Error updating fee type:', error);
+      res.status(500).json({ message: 'Failed to update fee type' });
+    }
+  });
+
+  app.delete('/api/fee-types/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      await storage.deleteFeeType(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error('Error deleting fee type:', error);
+      res.status(500).json({ message: 'Failed to delete fee type' });
+    }
+  });
+
+  // Fee Schedules
+  app.get('/api/fee-schedules', isAuthenticated, async (req, res) => {
+    try {
+      const feeSchedules = await storage.getAllFeeSchedules();
+      res.json(feeSchedules);
+    } catch (error) {
+      console.error('Error fetching fee schedules:', error);
+      res.status(500).json({ message: 'Failed to fetch fee schedules' });
+    }
+  });
+
+  app.post('/api/fee-schedules', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      const feeSchedule = await storage.createFeeSchedule(req.body);
+      res.status(201).json(feeSchedule);
+    } catch (error) {
+      console.error('Error creating fee schedule:', error);
+      res.status(500).json({ message: 'Failed to create fee schedule' });
+    }
+  });
+
+  // Fee Transactions
+  app.get('/api/fee-transactions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      let transactions;
+
+      if (user && ['admin', 'super_admin'].includes(user.role)) {
+        transactions = await storage.getAllFeeTransactions();
+      } else {
+        transactions = await storage.getFeeTransactionsByUser(userId);
+      }
+
+      res.json(transactions);
+    } catch (error) {
+      console.error('Error fetching fee transactions:', error);
+      res.status(500).json({ message: 'Failed to fetch fee transactions' });
+    }
+  });
+
+  app.get('/api/fee-transactions/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const transaction = await storage.getFeeTransactionById(req.params.id);
+      if (!transaction) {
+        return res.status(404).json({ message: 'Transaction not found' });
+      }
+
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      // Users can only see their own transactions unless they're admin
+      if (!user || (!['admin', 'super_admin'].includes(user.role) && transaction.userId !== userId)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      res.json(transaction);
+    } catch (error) {
+      console.error('Error fetching fee transaction:', error);
+      res.status(500).json({ message: 'Failed to fetch fee transaction' });
+    }
+  });
+
+  app.post('/api/fee-transactions/generate-monthly', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      const { month, year } = req.body;
+      const transactions = await storage.generateMonthlyFees(month, year);
+      res.json({ 
+        message: `Generated ${transactions.length} fee transactions for ${month}/${year}`,
+        transactions 
+      });
+    } catch (error) {
+      console.error('Error generating monthly fees:', error);
+      res.status(500).json({ message: 'Failed to generate monthly fees' });
+    }
+  });
+
+  // Payments
+  app.get('/api/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      let payments;
+
+      if (user && ['admin', 'super_admin'].includes(user.role)) {
+        payments = await storage.getAllPayments();
+      } else {
+        payments = await storage.getPaymentsByUser(userId);
+      }
+
+      res.json(payments);
+    } catch (error) {
+      console.error('Error fetching payments:', error);
+      res.status(500).json({ message: 'Failed to fetch payments' });
+    }
+  });
+
+  app.post('/api/payments', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      
+      // Set the processedBy field based on user role
+      const paymentData = {
+        ...req.body,
+        processedBy: user && ['admin', 'super_admin'].includes(user.role) ? userId : undefined,
+      };
+
+      const payment = await storage.createPayment(paymentData);
+      res.status(201).json(payment);
+    } catch (error) {
+      console.error('Error creating payment:', error);
+      res.status(500).json({ message: 'Failed to create payment' });
+    }
+  });
+
+  // Financial Reports
+  app.get('/api/financial/summary', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      const summary = await storage.getFinancialSummary();
+      res.json(summary);
+    } catch (error) {
+      console.error('Error fetching financial summary:', error);
+      res.status(500).json({ message: 'Failed to fetch financial summary' });
+    }
+  });
+
+  app.get('/api/financial/monthly-collection', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Unauthorized' });
+      }
+
+      const { month, year } = req.query;
+      if (!month || !year) {
+        return res.status(400).json({ message: 'Month and year are required' });
+      }
+
+      const report = await storage.getMonthlyCollectionReport(month as string, year as string);
+      res.json(report);
+    } catch (error) {
+      console.error('Error fetching monthly collection report:', error);
+      res.status(500).json({ message: 'Failed to fetch monthly collection report' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

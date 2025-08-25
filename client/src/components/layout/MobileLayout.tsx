@@ -20,7 +20,7 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3 } from "lucide-react";
+import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3, DollarSign } from "lucide-react";
 import type { PostWithAuthor, Amenity, BookingWithAmenity } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -361,16 +361,47 @@ export function MobileLayout() {
                         <span>Admin Panel</span>
                       </h3>
                     </div>
-                    <Button 
-                      onClick={() => window.location.href = '/admin'}
-                      className="w-full bg-secondary text-white hover:bg-green-700 py-3 rounded-lg font-medium"
-                      data-testid="button-admin-panel"
-                    >
-                      Access Admin Panel
-                    </Button>
+                    <div className="space-y-2">
+                      <Button 
+                        onClick={() => window.location.href = '/admin'}
+                        className="w-full bg-secondary text-white hover:bg-green-700 py-3 rounded-lg font-medium"
+                        data-testid="button-admin-panel"
+                      >
+                        Access Admin Panel
+                      </Button>
+                      <Button 
+                        onClick={() => window.location.href = '/financial'}
+                        className="w-full bg-blue-600 text-white hover:bg-blue-700 py-3 rounded-lg font-medium flex items-center justify-center gap-2"
+                        data-testid="button-financial-management"
+                      >
+                        <DollarSign className="w-4 h-4" />
+                        Financial Management
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               )}
+
+              {/* My Fees Panel (For all users) */}
+              <Card className="shadow-md border border-gray-200 bg-white">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-gray-800 flex items-center space-x-2">
+                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <DollarSign className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <span>Society Fees</span>
+                    </h3>
+                  </div>
+                  <Button 
+                    onClick={() => window.location.href = '/my-fees'}
+                    className="w-full bg-blue-600 text-white hover:bg-blue-700 py-3 rounded-lg font-medium"
+                    data-testid="button-my-fees"
+                  >
+                    View My Fees
+                  </Button>
+                </CardContent>
+              </Card>
 
               {/* Quick Service Access */}
               <Card className="shadow-md border border-gray-200 bg-white">

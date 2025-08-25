@@ -11,6 +11,7 @@ import {
   boolean,
   date,
   time,
+  numeric,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -452,6 +453,82 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Financial Management Tables
+
+// Fee types enum
+export const feeTypeEnum = pgEnum('fee_type', ['maintenance', 'parking', 'amenity', 'security', 'utilities', 'penalty', 'other']);
+
+// Fee frequency enum
+export const feeFrequencyEnum = pgEnum('fee_frequency', ['monthly', 'quarterly', 'annually', 'one_time']);
+
+// Payment status enum
+export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'paid', 'overdue', 'cancelled']);
+
+// Payment method enum
+export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank_transfer', 'upi', 'cheque', 'card', 'online']);
+
+// Fee types table
+export const feeTypes = pgTable("fee_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: feeTypeEnum("type").notNull(),
+  description: text("description"),
+  defaultAmount: numeric("default_amount", { precision: 10, scale: 2 }),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Fee schedules table
+export const feeSchedules = pgTable("fee_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  feeTypeId: varchar("fee_type_id").notNull().references(() => feeTypes.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  frequency: feeFrequencyEnum("frequency").notNull(),
+  dueDay: integer("due_day").default(1), // Day of month for monthly fees
+  isActive: boolean("is_active").default(true).notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date"),
+  applicableUnits: text("applicable_units").array(), // Unit patterns like ["1*", "2*"] for floors 1&2
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Fee transactions table
+export const feeTransactions = pgTable("fee_transactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  feeScheduleId: varchar("fee_schedule_id").references(() => feeSchedules.id),
+  feeTypeId: varchar("fee_type_id").notNull().references(() => feeTypes.id),
+  description: varchar("description", { length: 255 }).notNull(),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  dueDate: date("due_date").notNull(),
+  status: paymentStatusEnum("status").default('pending').notNull(),
+  penaltyAmount: numeric("penalty_amount", { precision: 10, scale: 2 }).default('0'),
+  totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
+  unitNumber: varchar("unit_number"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payments table
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  feeTransactionId: varchar("fee_transaction_id").notNull().references(() => feeTransactions.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  paymentMethod: paymentMethodEnum("payment_method").notNull(),
+  paymentDate: timestamp("payment_date").defaultNow(),
+  referenceNumber: varchar("reference_number"),
+  transactionId: varchar("transaction_id"),
+  notes: text("notes"),
+  receiptNumber: varchar("receipt_number"),
+  processedBy: varchar("processed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Password reset tokens relations
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
   user: one(users, {
@@ -478,4 +555,93 @@ export type BookingReport = {
   popularAmenities: { amenityName: string; bookingCount: number }[];
   bookingsByMonth: { month: string; count: number }[];
   recentBookings: BookingWithAmenity[];
+};
+
+// Financial relations
+export const feeTypesRelations = relations(feeTypes, ({ many }) => ({
+  schedules: many(feeSchedules),
+  transactions: many(feeTransactions),
+}));
+
+export const feeSchedulesRelations = relations(feeSchedules, ({ one, many }) => ({
+  feeType: one(feeTypes, {
+    fields: [feeSchedules.feeTypeId],
+    references: [feeTypes.id],
+  }),
+  transactions: many(feeTransactions),
+}));
+
+export const feeTransactionsRelations = relations(feeTransactions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [feeTransactions.userId],
+    references: [users.id],
+  }),
+  feeType: one(feeTypes, {
+    fields: [feeTransactions.feeTypeId],
+    references: [feeTypes.id],
+  }),
+  feeSchedule: one(feeSchedules, {
+    fields: [feeTransactions.feeScheduleId],
+    references: [feeSchedules.id],
+  }),
+  payments: many(payments),
+}));
+
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  feeTransaction: one(feeTransactions, {
+    fields: [payments.feeTransactionId],
+    references: [feeTransactions.id],
+  }),
+  user: one(users, {
+    fields: [payments.userId],
+    references: [users.id],
+  }),
+  processedByUser: one(users, {
+    fields: [payments.processedBy],
+    references: [users.id],
+  }),
+}));
+
+// Financial Management Types
+export type FeeType = typeof feeTypes.$inferSelect;
+export type InsertFeeType = typeof feeTypes.$inferInsert;
+export type FeeSchedule = typeof feeSchedules.$inferSelect;
+export type InsertFeeSchedule = typeof feeSchedules.$inferInsert;
+export type FeeTransaction = typeof feeTransactions.$inferSelect;
+export type InsertFeeTransaction = typeof feeTransactions.$inferInsert;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = typeof payments.$inferInsert;
+
+// Financial Management Insert Schemas
+export const insertFeeTypeSchema = createInsertSchema(feeTypes);
+export const insertFeeScheduleSchema = createInsertSchema(feeSchedules);
+export const insertFeeTransactionSchema = createInsertSchema(feeTransactions);
+export const insertPaymentSchema = createInsertSchema(payments);
+
+// Financial extended types with relations
+export type FeeTransactionWithDetails = FeeTransaction & {
+  user: { id: string; firstName: string | null; lastName: string | null; unitNumber: string | null };
+  feeType: FeeType;
+  feeSchedule?: FeeSchedule | null;
+  payments: Payment[];
+  totalPaid: string;
+  remainingAmount: string;
+};
+
+export type PaymentWithDetails = Payment & {
+  feeTransaction: FeeTransaction & {
+    feeType: FeeType;
+    user: { id: string; firstName: string | null; lastName: string | null; unitNumber: string | null };
+  };
+  processedByUser?: { id: string; firstName: string | null; lastName: string | null } | null;
+};
+
+export type FinancialSummary = {
+  totalPending: string;
+  totalPaid: string;
+  totalOverdue: string;
+  monthlyCollection: string;
+  pendingCount: number;
+  paidCount: number;
+  overdueCount: number;
 };

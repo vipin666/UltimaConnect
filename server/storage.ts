@@ -43,6 +43,21 @@ import {
   type PasswordResetToken,
   type InsertPasswordResetToken,
   type BookingReport,
+  type FeeType,
+  type InsertFeeType,
+  type FeeSchedule,
+  type InsertFeeSchedule,
+  type FeeTransaction,
+  type InsertFeeTransaction,
+  type Payment,
+  type InsertPayment,
+  type FeeTransactionWithDetails,
+  type PaymentWithDetails,
+  type FinancialSummary,
+  feeTypes,
+  feeSchedules,
+  feeTransactions,
+  payments,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
@@ -125,6 +140,43 @@ export interface IStorage {
   
   // Booking report operations
   getBookingReport(): Promise<BookingReport>;
+  
+  // Financial Management operations
+  // Fee Types
+  createFeeType(feeType: InsertFeeType): Promise<FeeType>;
+  getAllFeeTypes(): Promise<FeeType[]>;
+  updateFeeType(id: string, updates: Partial<InsertFeeType>): Promise<FeeType>;
+  deleteFeeType(id: string): Promise<void>;
+  
+  // Fee Schedules
+  createFeeSchedule(schedule: InsertFeeSchedule): Promise<FeeSchedule>;
+  getAllFeeSchedules(): Promise<FeeSchedule[]>;
+  getFeeSchedulesByType(feeTypeId: string): Promise<FeeSchedule[]>;
+  updateFeeSchedule(id: string, updates: Partial<InsertFeeSchedule>): Promise<FeeSchedule>;
+  deleteFeeSchedule(id: string): Promise<void>;
+  
+  // Fee Transactions
+  createFeeTransaction(transaction: InsertFeeTransaction): Promise<FeeTransaction>;
+  getFeeTransactionsByUser(userId: string): Promise<FeeTransactionWithDetails[]>;
+  getAllFeeTransactions(): Promise<FeeTransactionWithDetails[]>;
+  getFeeTransactionById(id: string): Promise<FeeTransactionWithDetails | undefined>;
+  updateFeeTransactionStatus(id: string, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<FeeTransaction>;
+  generateMonthlyFees(month: string, year: string): Promise<FeeTransaction[]>;
+  
+  // Payments
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  getPaymentsByUser(userId: string): Promise<PaymentWithDetails[]>;
+  getAllPayments(): Promise<PaymentWithDetails[]>;
+  getPaymentsByTransaction(transactionId: string): Promise<Payment[]>;
+  
+  // Financial Reports
+  getFinancialSummary(): Promise<FinancialSummary>;
+  getMonthlyCollectionReport(month: string, year: string): Promise<{
+    totalDue: string;
+    totalCollected: string;
+    collectionPercentage: number;
+    pendingAmount: string;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1031,6 +1083,481 @@ export class DatabaseStorage implements IStorage {
         count: item.count,
       })),
       recentBookings,
+    };
+  }
+
+  // Financial Management operations implementation
+  
+  // Fee Types
+  async createFeeType(feeType: InsertFeeType): Promise<FeeType> {
+    const [created] = await db.insert(feeTypes).values(feeType).returning();
+    return created;
+  }
+
+  async getAllFeeTypes(): Promise<FeeType[]> {
+    return await db.select().from(feeTypes).orderBy(feeTypes.name);
+  }
+
+  async updateFeeType(id: string, updates: Partial<InsertFeeType>): Promise<FeeType> {
+    const [updated] = await db
+      .update(feeTypes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(feeTypes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteFeeType(id: string): Promise<void> {
+    await db.delete(feeTypes).where(eq(feeTypes.id, id));
+  }
+
+  // Fee Schedules
+  async createFeeSchedule(schedule: InsertFeeSchedule): Promise<FeeSchedule> {
+    const [created] = await db.insert(feeSchedules).values(schedule).returning();
+    return created;
+  }
+
+  async getAllFeeSchedules(): Promise<FeeSchedule[]> {
+    return await db.select().from(feeSchedules).orderBy(feeSchedules.name);
+  }
+
+  async getFeeSchedulesByType(feeTypeId: string): Promise<FeeSchedule[]> {
+    return await db
+      .select()
+      .from(feeSchedules)
+      .where(eq(feeSchedules.feeTypeId, feeTypeId));
+  }
+
+  async updateFeeSchedule(id: string, updates: Partial<InsertFeeSchedule>): Promise<FeeSchedule> {
+    const [updated] = await db
+      .update(feeSchedules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(feeSchedules.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteFeeSchedule(id: string): Promise<void> {
+    await db.delete(feeSchedules).where(eq(feeSchedules.id, id));
+  }
+
+  // Fee Transactions
+  async createFeeTransaction(transaction: InsertFeeTransaction): Promise<FeeTransaction> {
+    const [created] = await db.insert(feeTransactions).values(transaction).returning();
+    return created;
+  }
+
+  async getFeeTransactionsByUser(userId: string): Promise<FeeTransactionWithDetails[]> {
+    const results = await db
+      .select({
+        transaction: feeTransactions,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          unitNumber: users.unitNumber,
+        },
+        feeType: feeTypes,
+        feeSchedule: feeSchedules,
+      })
+      .from(feeTransactions)
+      .leftJoin(users, eq(feeTransactions.userId, users.id))
+      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
+      .leftJoin(feeSchedules, eq(feeTransactions.feeScheduleId, feeSchedules.id))
+      .where(eq(feeTransactions.userId, userId))
+      .orderBy(desc(feeTransactions.createdAt));
+
+    // For each transaction, get payments and calculate totals
+    const transactionsWithDetails: FeeTransactionWithDetails[] = [];
+    for (const result of results) {
+      const transactionPayments = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.feeTransactionId, result.transaction.id));
+
+      const totalPaid = transactionPayments.reduce((sum, payment) => 
+        sum + parseFloat(payment.amount), 0
+      ).toFixed(2);
+
+      const remainingAmount = (
+        parseFloat(result.transaction.totalAmount) - parseFloat(totalPaid)
+      ).toFixed(2);
+
+      transactionsWithDetails.push({
+        ...result.transaction,
+        user: result.user!,
+        feeType: result.feeType!,
+        feeSchedule: result.feeSchedule,
+        payments: transactionPayments,
+        totalPaid,
+        remainingAmount,
+      });
+    }
+
+    return transactionsWithDetails;
+  }
+
+  async getAllFeeTransactions(): Promise<FeeTransactionWithDetails[]> {
+    const results = await db
+      .select({
+        transaction: feeTransactions,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          unitNumber: users.unitNumber,
+        },
+        feeType: feeTypes,
+        feeSchedule: feeSchedules,
+      })
+      .from(feeTransactions)
+      .leftJoin(users, eq(feeTransactions.userId, users.id))
+      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
+      .leftJoin(feeSchedules, eq(feeTransactions.feeScheduleId, feeSchedules.id))
+      .orderBy(desc(feeTransactions.createdAt));
+
+    // For each transaction, get payments and calculate totals
+    const transactionsWithDetails: FeeTransactionWithDetails[] = [];
+    for (const result of results) {
+      const transactionPayments = await db
+        .select()
+        .from(payments)
+        .where(eq(payments.feeTransactionId, result.transaction.id));
+
+      const totalPaid = transactionPayments.reduce((sum, payment) => 
+        sum + parseFloat(payment.amount), 0
+      ).toFixed(2);
+
+      const remainingAmount = (
+        parseFloat(result.transaction.totalAmount) - parseFloat(totalPaid)
+      ).toFixed(2);
+
+      transactionsWithDetails.push({
+        ...result.transaction,
+        user: result.user!,
+        feeType: result.feeType!,
+        feeSchedule: result.feeSchedule,
+        payments: transactionPayments,
+        totalPaid,
+        remainingAmount,
+      });
+    }
+
+    return transactionsWithDetails;
+  }
+
+  async getFeeTransactionById(id: string): Promise<FeeTransactionWithDetails | undefined> {
+    const [result] = await db
+      .select({
+        transaction: feeTransactions,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          unitNumber: users.unitNumber,
+        },
+        feeType: feeTypes,
+        feeSchedule: feeSchedules,
+      })
+      .from(feeTransactions)
+      .leftJoin(users, eq(feeTransactions.userId, users.id))
+      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
+      .leftJoin(feeSchedules, eq(feeTransactions.feeScheduleId, feeSchedules.id))
+      .where(eq(feeTransactions.id, id));
+
+    if (!result) return undefined;
+
+    const transactionPayments = await db
+      .select()
+      .from(payments)
+      .where(eq(payments.feeTransactionId, result.transaction.id));
+
+    const totalPaid = transactionPayments.reduce((sum, payment) => 
+      sum + parseFloat(payment.amount), 0
+    ).toFixed(2);
+
+    const remainingAmount = (
+      parseFloat(result.transaction.totalAmount) - parseFloat(totalPaid)
+    ).toFixed(2);
+
+    return {
+      ...result.transaction,
+      user: result.user!,
+      feeType: result.feeType!,
+      feeSchedule: result.feeSchedule,
+      payments: transactionPayments,
+      totalPaid,
+      remainingAmount,
+    };
+  }
+
+  async updateFeeTransactionStatus(id: string, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<FeeTransaction> {
+    const [updated] = await db
+      .update(feeTransactions)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(feeTransactions.id, id))
+      .returning();
+    return updated;
+  }
+
+  async generateMonthlyFees(month: string, year: string): Promise<FeeTransaction[]> {
+    // Get active fee schedules
+    const activeSchedules = await db
+      .select()
+      .from(feeSchedules)
+      .where(eq(feeSchedules.isActive, true));
+
+    // Get all active residents
+    const activeUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.status, 'active'));
+
+    const createdTransactions: FeeTransaction[] = [];
+    const dueDate = new Date(`${year}-${month}-01`);
+
+    for (const schedule of activeSchedules) {
+      for (const user of activeUsers) {
+        // Check if this user's unit matches the applicable units
+        if (schedule.applicableUnits && schedule.applicableUnits.length > 0) {
+          const userUnit = user.unitNumber;
+          if (!userUnit) continue;
+          
+          const matchesPattern = schedule.applicableUnits.some(pattern => {
+            if (pattern.endsWith('*')) {
+              const prefix = pattern.slice(0, -1);
+              return userUnit.startsWith(prefix);
+            }
+            return userUnit === pattern;
+          });
+          
+          if (!matchesPattern) continue;
+        }
+
+        // Check if transaction already exists for this month
+        const existingTransaction = await db
+          .select()
+          .from(feeTransactions)
+          .where(
+            and(
+              eq(feeTransactions.userId, user.id),
+              eq(feeTransactions.feeScheduleId, schedule.id),
+              sql`EXTRACT(MONTH FROM ${feeTransactions.dueDate}) = ${month}`,
+              sql`EXTRACT(YEAR FROM ${feeTransactions.dueDate}) = ${year}`
+            )
+          )
+          .limit(1);
+
+        if (existingTransaction.length > 0) continue;
+
+        // Create new fee transaction
+        const transaction: InsertFeeTransaction = {
+          userId: user.id,
+          feeScheduleId: schedule.id,
+          feeTypeId: schedule.feeTypeId,
+          description: `${schedule.name} - ${month}/${year}`,
+          amount: schedule.amount,
+          dueDate: dueDate.toISOString().split('T')[0],
+          status: 'pending',
+          penaltyAmount: '0',
+          totalAmount: schedule.amount,
+          unitNumber: user.unitNumber,
+        };
+
+        const [created] = await db.insert(feeTransactions).values(transaction).returning();
+        createdTransactions.push(created);
+      }
+    }
+
+    return createdTransactions;
+  }
+
+  // Payments
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const [created] = await db.insert(payments).values(payment).returning();
+    
+    // Update fee transaction status if fully paid
+    const transaction = await this.getFeeTransactionById(payment.feeTransactionId);
+    if (transaction) {
+      const totalPaid = parseFloat(transaction.totalPaid) + parseFloat(payment.amount);
+      const totalAmount = parseFloat(transaction.totalAmount);
+      
+      if (totalPaid >= totalAmount) {
+        await this.updateFeeTransactionStatus(payment.feeTransactionId, 'paid');
+      }
+    }
+    
+    return created;
+  }
+
+  async getPaymentsByUser(userId: string): Promise<PaymentWithDetails[]> {
+    const results = await db
+      .select({
+        payment: payments,
+        feeTransaction: feeTransactions,
+        feeType: feeTypes,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          unitNumber: users.unitNumber,
+        },
+        processedByUser: {
+          id: sql<string>`processed_by_user.id`,
+          firstName: sql<string>`processed_by_user.first_name`,
+          lastName: sql<string>`processed_by_user.last_name`,
+        },
+      })
+      .from(payments)
+      .leftJoin(feeTransactions, eq(payments.feeTransactionId, feeTransactions.id))
+      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
+      .leftJoin(users, eq(feeTransactions.userId, users.id))
+      .leftJoin(sql`users AS processed_by_user`, sql`payments.processed_by = processed_by_user.id`)
+      .where(eq(payments.userId, userId))
+      .orderBy(desc(payments.createdAt));
+
+    return results.map(result => ({
+      ...result.payment,
+      feeTransaction: {
+        ...result.feeTransaction!,
+        feeType: result.feeType!,
+        user: result.user!,
+      },
+      processedByUser: result.processedByUser?.id ? result.processedByUser : null,
+    }));
+  }
+
+  async getAllPayments(): Promise<PaymentWithDetails[]> {
+    const results = await db
+      .select({
+        payment: payments,
+        feeTransaction: feeTransactions,
+        feeType: feeTypes,
+        user: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          unitNumber: users.unitNumber,
+        },
+        processedByUser: {
+          id: sql<string>`processed_by_user.id`,
+          firstName: sql<string>`processed_by_user.first_name`,
+          lastName: sql<string>`processed_by_user.last_name`,
+        },
+      })
+      .from(payments)
+      .leftJoin(feeTransactions, eq(payments.feeTransactionId, feeTransactions.id))
+      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
+      .leftJoin(users, eq(feeTransactions.userId, users.id))
+      .leftJoin(sql`users AS processed_by_user`, sql`payments.processed_by = processed_by_user.id`)
+      .orderBy(desc(payments.createdAt));
+
+    return results.map(result => ({
+      ...result.payment,
+      feeTransaction: {
+        ...result.feeTransaction!,
+        feeType: result.feeType!,
+        user: result.user!,
+      },
+      processedByUser: result.processedByUser?.id ? result.processedByUser : null,
+    }));
+  }
+
+  async getPaymentsByTransaction(transactionId: string): Promise<Payment[]> {
+    return await db
+      .select()
+      .from(payments)
+      .where(eq(payments.feeTransactionId, transactionId))
+      .orderBy(desc(payments.createdAt));
+  }
+
+  // Financial Reports
+  async getFinancialSummary(): Promise<FinancialSummary> {
+    // Get pending transactions
+    const pendingResult = await db
+      .select({
+        count: sql<number>`count(*)`,
+        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
+      })
+      .from(feeTransactions)
+      .where(eq(feeTransactions.status, 'pending'));
+
+    // Get paid transactions
+    const paidResult = await db
+      .select({
+        count: sql<number>`count(*)`,
+        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
+      })
+      .from(feeTransactions)
+      .where(eq(feeTransactions.status, 'paid'));
+
+    // Get overdue transactions
+    const overdueResult = await db
+      .select({
+        count: sql<number>`count(*)`,
+        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
+      })
+      .from(feeTransactions)
+      .where(eq(feeTransactions.status, 'overdue'));
+
+    // Get this month's collection
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const monthlyResult = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${payments.amount}), 0)`,
+      })
+      .from(payments)
+      .where(sql`DATE_TRUNC('month', ${payments.paymentDate}) = DATE_TRUNC('month', CURRENT_DATE)`);
+
+    return {
+      totalPending: pendingResult[0]?.total || '0',
+      totalPaid: paidResult[0]?.total || '0',
+      totalOverdue: overdueResult[0]?.total || '0',
+      monthlyCollection: monthlyResult[0]?.total || '0',
+      pendingCount: pendingResult[0]?.count || 0,
+      paidCount: paidResult[0]?.count || 0,
+      overdueCount: overdueResult[0]?.count || 0,
+    };
+  }
+
+  async getMonthlyCollectionReport(month: string, year: string) {
+    // Get total due for the month
+    const totalDueResult = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
+      })
+      .from(feeTransactions)
+      .where(
+        and(
+          sql`EXTRACT(MONTH FROM ${feeTransactions.dueDate}) = ${month}`,
+          sql`EXTRACT(YEAR FROM ${feeTransactions.dueDate}) = ${year}`
+        )
+      );
+
+    // Get total collected for the month
+    const totalCollectedResult = await db
+      .select({
+        total: sql<string>`COALESCE(SUM(${payments.amount}), 0)`,
+      })
+      .from(payments)
+      .leftJoin(feeTransactions, eq(payments.feeTransactionId, feeTransactions.id))
+      .where(
+        and(
+          sql`EXTRACT(MONTH FROM ${feeTransactions.dueDate}) = ${month}`,
+          sql`EXTRACT(YEAR FROM ${feeTransactions.dueDate}) = ${year}`
+        )
+      );
+
+    const totalDue = parseFloat(totalDueResult[0]?.total || '0');
+    const totalCollected = parseFloat(totalCollectedResult[0]?.total || '0');
+    const collectionPercentage = totalDue > 0 ? (totalCollected / totalDue) * 100 : 0;
+    const pendingAmount = totalDue - totalCollected;
+
+    return {
+      totalDue: totalDue.toFixed(2),
+      totalCollected: totalCollected.toFixed(2),
+      collectionPercentage: Math.round(collectionPercentage * 100) / 100,
+      pendingAmount: pendingAmount.toFixed(2),
     };
   }
 }
