@@ -120,29 +120,29 @@ export function MobileLayout() {
   };
 
   const renderCommunityTab = () => (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-20">
       {/* Quick Actions */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-3 px-4">
         <Button 
           onClick={() => setShowPostModal(true)}
-          className="bg-accent text-white p-4 rounded-lg shadow-material flex flex-col items-center space-y-2 hover:bg-orange-600 h-auto"
+          className="bg-accent text-white p-4 rounded-lg shadow-md flex flex-col items-center justify-center space-y-2 hover:bg-orange-600 h-16"
           data-testid="button-new-post"
         >
-          <Plus className="w-6 h-6" />
+          <Plus className="w-5 h-5" />
           <span className="text-sm font-medium">New Post</span>
         </Button>
         <Button 
           variant="outline"
-          className="border-2 border-error text-error p-4 rounded-lg shadow-material flex flex-col items-center space-y-2 hover:bg-red-50 h-auto"
+          className="border-2 border-red-500 text-red-500 p-4 rounded-lg shadow-md flex flex-col items-center justify-center space-y-2 hover:bg-red-50 h-16"
           data-testid="button-complaints"
         >
-          <AlertTriangle className="w-6 h-6" />
+          <AlertTriangle className="w-5 h-5" />
           <span className="text-sm font-medium">Complaints</span>
         </Button>
       </div>
 
       {/* Community Feed */}
-      <div className="space-y-4">
+      <div className="space-y-4 px-4">
         <h2 className="text-lg font-medium text-gray-800" data-testid="text-community-feed">Community Feed</h2>
         
         {postsLoading ? (
@@ -193,7 +193,7 @@ export function MobileLayout() {
   );
 
   const renderBookingsTab = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 px-4">
       <h2 className="text-lg font-medium text-gray-800" data-testid="text-amenity-bookings">Amenity Bookings</h2>
       
       {/* Booking Options */}
@@ -282,7 +282,7 @@ export function MobileLayout() {
   );
 
   const renderServicesTab = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 px-4">
       <h2 className="text-lg font-medium text-gray-800">Building Services</h2>
       
       {/* Admin Panel (Conditional) */}
@@ -356,9 +356,9 @@ export function MobileLayout() {
   }
 
   return (
-    <div className="max-w-md mx-auto bg-white min-h-screen">
+    <div className="max-w-md mx-auto bg-white min-h-screen flex flex-col">
       {/* Header */}
-      <header className="bg-primary text-white p-4 shadow-material">
+      <header className="bg-primary text-white p-4 shadow-md sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Building className="w-6 h-6" />
@@ -393,7 +393,7 @@ export function MobileLayout() {
       </header>
 
       {/* Content */}
-      <div className="p-4 pb-20">
+      <div className="flex-1 overflow-auto">
         {activeTab === 'community' && renderCommunityTab()}
         {activeTab === 'bookings' && renderBookingsTab()}
         {activeTab === 'services' && renderServicesTab()}

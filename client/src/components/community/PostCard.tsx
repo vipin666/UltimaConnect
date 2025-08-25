@@ -54,10 +54,12 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'active':
+        return <Badge variant="destructive" className="text-xs">Active</Badge>;
       case 'resolved':
-        return <Badge className="bg-green-100 text-green-800">Resolved</Badge>;
+        return <Badge className="bg-green-500 text-white text-xs">Resolved</Badge>;
       case 'frozen':
-        return <Badge variant="secondary">Frozen</Badge>;
+        return <Badge variant="secondary" className="text-xs">Deferred</Badge>;
       default:
         return null;
     }
@@ -72,13 +74,18 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
           </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-medium text-gray-800 truncate" data-testid={`text-title-${post.id}`}>
-                {post.title}
-              </h3>
-              <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                {post.author.unitNumber ? `Unit ${post.author.unitNumber}` : 'Admin'} • {format(new Date(post.createdAt!), 'MMM d')}
-              </span>
+            <div className="flex items-start justify-between mb-2">
+              <div className="flex-1 pr-2">
+                <h3 className="font-medium text-gray-800" data-testid={`text-title-${post.id}`}>
+                  {post.title}
+                </h3>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                {getStatusBadge(post.status)}
+                <span className="text-xs text-gray-500">
+                  {post.author.unitNumber ? `Unit ${post.author.unitNumber}` : 'Admin'} • {format(new Date(post.createdAt!), 'MMM d')}
+                </span>
+              </div>
             </div>
             
             {post.type !== 'general' && (
@@ -136,7 +143,6 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
                 </Button>
               </div>
               
-              {post.status !== 'active' && getStatusBadge(post.status)}
             </div>
           </div>
         </div>
