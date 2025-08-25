@@ -1,0 +1,132 @@
+Build a mobile app (Android + iOS) for a 15-floor residential building with the following specifications:
+
+👥 User Roles & Access
+
+Super Admin
+
+Can add/remove Admin (Committee Members).
+
+Manages global settings of the app.
+
+Admin (Committee Member)
+
+Approves/rejects Owner onboarding.
+
+Approves/rejects Tenant access (tenant approval comes only after Owner grants permission).
+
+Gets notified instantly when a Complaint Post is raised in their category.
+
+Can comment on posts, mark complaints as “Resolved,” and freeze the post (no further comments).
+
+Resident (Owners & Tenants)
+
+Owners are onboarded by Admins.
+
+Tenants need owner approval + admin confirmation.
+
+Can create posts (Complaints, Suggestions, Events).
+
+Can comment on posts by others.
+
+Can book facilities (pool, gym, pool table, party hall, guest parking).
+
+Watchman/Security
+
+Has a simple module to:
+
+Notify residents when a guest arrives.
+
+Notify residents about guest parking expiry.
+
+Post urgent alerts (e.g., maintenance, delivery, safety issues).
+
+🏠 App Features
+🔑 Authentication & Access
+
+Role-based login (Super Admin / Admin / Resident / Watchman).
+
+Owners onboarded by Admin.
+
+Tenants require Owner approval + Admin confirmation.
+
+📰 Landing Page (Community Feed)
+
+Default page after login.
+
+Shows Posts from residents (Suggestions, Complaints, Events).
+
+Posts Features:
+
+Title + Description + Category (Complaint / Suggestion / Event).
+
+Comments allowed by all residents.
+
+Complaints auto-notify respective Admins.
+
+Admin can mark complaints as resolved and freeze post.
+
+📅 Facility Booking
+
+No payment required – only slot booking.
+
+Residents can book:
+
+Swimming Pool (First Floor)
+
+Party Hall (15th Floor)
+
+Pool Table
+
+Gym
+
+Guest Parking (3 slots available)
+
+Each booking:
+
+Date + Time Slot.
+
+Prevents double booking for same slot.
+
+Displays availability calendar view.
+
+🛡 Watchman Module
+
+Guest Arrivals: Search/Select Resident → Notify.
+
+Guest Parking: Track 3 slots, notify resident before expiry.
+
+General Alerts: Send building-wide notifications (fire drill, maintenance, security).
+
+🔔 Notifications
+
+Push notifications for:
+
+Complaint posts to Admins.
+
+Guest arrivals to residents.
+
+Guest parking expiry reminders.
+
+Booking confirmations/cancellations.
+
+⚙️ Additional Features
+
+User profile (Flat Number, Owner/Tenant, Contact Info).
+
+Role management (Super Admin → Admin → Owner → Tenant).
+
+Facility usage history & upcoming bookings.
+
+Admin dashboard for quick monitoring of complaints & bookings.
+
+🎨 Design Requirements
+
+Clean, minimal UI.
+
+Landing feed like a social media wall.
+
+Color theme: Society/community friendly (blue/green tones).
+
+Easy navigation tabs: Feed | Booking | Notifications | Profile.
+
+👉 Generate the complete mobile app in React Native, with Firebase (or any backend of your choice) for authentication, role management, notifications, and booking data handling.

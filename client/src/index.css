@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(0 0% 98%);
+  --foreground: hsl(210 25% 8%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(210 25% 8%);
+  --popover: hsl(0 0% 100%);
+  --popover-foreground: hsl(210 25% 8%);
+  --primary: hsl(207 90% 42%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(122 39% 49%);
+  --secondary-foreground: hsl(0 0% 100%);
+  --accent: hsl(14 100% 57%);
+  --accent-foreground: hsl(0 0% 100%);
+  --muted: hsl(240 2% 90%);
+  --muted-foreground: hsl(210 25% 8%);
+  --destructive: hsl(356 91% 54%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(201 30% 91%);
+  --input: hsl(200 23% 97%);
+  --ring: hsl(203 89% 53%);
+  --chart-1: hsl(207 90% 42%);
+  --chart-2: hsl(122 39% 49%);
+  --chart-3: hsl(14 100% 57%);
+  --chart-4: hsl(147 79% 42%);
+  --chart-5: hsl(341 75% 51%);
+  --error: hsl(356 91% 54%);
+  --surface: hsl(0 0% 100%);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: hsl(0 0% 0%);
+  --foreground: hsl(200 7% 91%);
+  --card: hsl(228 10% 10%);
+  --card-foreground: hsl(0 0% 85%);
+  --popover: hsl(0 0% 0%);
+  --popover-foreground: hsl(200 7% 91%);
+  --primary: hsl(204 88% 53%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(195 15% 95%);
+  --secondary-foreground: hsl(210 25% 8%);
+  --accent: hsl(206 70% 8%);
+  --accent-foreground: hsl(204 88% 53%);
+  --muted: hsl(0 0% 9%);
+  --muted-foreground: hsl(210 3% 46%);
+  --destructive: hsl(356 91% 54%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --border: hsl(210 5% 15%);
+  --input: hsl(208 28% 18%);
+  --ring: hsl(203 89% 53%);
+  --chart-1: hsl(204 88% 53%);
+  --chart-2: hsl(122 39% 49%);
+  --chart-3: hsl(14 100% 57%);
+  --chart-4: hsl(147 79% 42%);
+  --chart-5: hsl(341 75% 51%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-roboto antialiased bg-background text-foreground;
+    font-family: 'Roboto', sans-serif;
+  }
+
+  .shadow-material {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1), 0 8px 16px rgba(0,0,0,0.1);
+  }
+
+  .shadow-material-lg {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.12), 0 16px 32px rgba(0,0,0,0.12);
+  }
+}
