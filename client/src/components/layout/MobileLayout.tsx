@@ -93,6 +93,7 @@ export function MobileLayout() {
     onSuccess: (_, postId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
       queryClient.invalidateQueries({ queryKey: ['/api/posts', postId, 'like-status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', postId, 'likes'] });
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {

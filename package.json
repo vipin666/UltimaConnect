@@ -22,7 +22,8 @@
     "seed-biometric-data": "tsx scripts/seed-biometric-data.ts",
     "deploy-production": "tsx scripts/deploy-production.ts",
     "enable-fingerprint": "tsx scripts/enable-fingerprint-for-all-users.ts",
-    "test-likes-comments": "tsx scripts/test-likes-comments.ts"
+    "test-likes-comments": "tsx scripts/test-likes-comments.ts",
+    "add-test-likes": "tsx scripts/add-test-likes.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

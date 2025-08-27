@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThumbsUp, MessageCircle, Calendar, MapPin, User } from "lucide-react";
 import { format } from "date-fns";
 import type { PostWithAuthor } from "@shared/schema";
@@ -28,6 +29,19 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
       return response.json();
     },
     enabled: !!user && !!post.id,
+  });
+
+  // Get list of users who liked this post
+  const { data: postLikes = [] } = useQuery({
+    queryKey: ['/api/posts', post.id, 'likes'],
+    queryFn: async () => {
+      const response = await fetch(`/api/posts/${post.id}/likes`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch post likes');
+      }
+      return response.json();
+    },
+    enabled: !!post.id && (post.likes ?? 0) > 0,
   });
   const getPostTypeColor = (type: string) => {
     switch (type) {
@@ -159,21 +173,50 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
             
             <div className="flex items-center justify-start pt-2 border-t border-gray-100">
               <div className="flex items-center space-x-6">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onLike(post.id)}
-                  disabled={isLiking}
-                  className={`px-2 py-1 h-8 rounded-md transition-colors ${
-                    likeStatus?.hasLiked 
-                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
-                      : 'text-primary hover:text-primary hover:bg-blue-50'
-                  }`}
-                  data-testid={`button-like-${post.id}`}
-                >
-                  <ThumbsUp className={`w-4 h-4 mr-2 ${likeStatus?.hasLiked ? 'fill-current' : ''}`} />
-                  <span className="text-sm">{post.likes ?? 0}</span>
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onLike(post.id)}
+                        disabled={isLiking}
+                        className={`px-2 py-1 h-8 rounded-md transition-colors ${
+                          likeStatus?.hasLiked 
+                            ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                            : 'text-primary hover:text-primary hover:bg-blue-50'
+                        }`}
+                        data-testid={`button-like-${post.id}`}
+                      >
+                        <ThumbsUp className={`w-4 h-4 mr-2 ${likeStatus?.hasLiked ? 'fill-current' : ''}`} />
+                        <span className="text-sm">{post.likes ?? 0}</span>
+                      </Button>
+                    </TooltipTrigger>
+                    {postLikes.length > 0 && (
+                      <TooltipContent side="top" className="max-w-xs">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-gray-900">Liked by:</p>
+                          <div className="space-y-1">
+                            {postLikes.slice(0, 5).map((like: any) => (
+                              <div key={like.id} className="flex items-center space-x-2">
+                                <User className="w-3 h-3 text-gray-500" />
+                                <span className="text-xs text-gray-700">
+                                  {like.user.firstName} {like.user.lastName}
+                                  {like.user.unitNumber && ` (${like.user.unitNumber})`}
+                                </span>
+                              </div>
+                            ))}
+                            {postLikes.length > 5 && (
+                              <p className="text-xs text-gray-500">
+                                and {postLikes.length - 5} more...
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
                 
                 <Button
                   variant="ghost"

@@ -443,6 +443,29 @@ export const storage: IStorage = {
     return !!like;
   },
 
+  async getPostLikes(postId: string) {
+    const likes = await runQueryAll(`
+      SELECT pl.*, u.firstName, u.lastName, u.username, u.unitNumber
+      FROM post_likes pl
+      LEFT JOIN users u ON pl.userId = u.id
+      WHERE pl.postId = ?
+      ORDER BY pl.createdAt DESC
+    `, [postId]);
+    
+    return likes.map(like => ({
+      id: like.id,
+      userId: like.userId,
+      postId: like.postId,
+      createdAt: like.createdAt,
+      user: {
+        firstName: like.firstName,
+        lastName: like.lastName,
+        username: like.username,
+        unitNumber: like.unitNumber
+      }
+    }));
+  },
+
   async deletePost(id: string) {
     await runQueryRun('DELETE FROM posts WHERE id = ?', [id]);
   },

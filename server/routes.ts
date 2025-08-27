@@ -602,6 +602,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/posts/:postId/likes', isAuthenticated, async (req: any, res) => {
+    try {
+      const postId = req.params.postId;
+      const likes = await storage.getPostLikes(postId);
+      res.json(likes);
+    } catch (error) {
+      console.error("Error fetching post likes:", error);
+      res.status(500).json({ message: "Failed to fetch post likes" });
+    }
+  });
+
   // Comment routes
   app.get('/api/posts/:postId/comments', isAuthenticated, async (req: any, res) => {
     try {
