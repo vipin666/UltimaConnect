@@ -27,7 +27,8 @@ import {
   Banknote,
   Receipt,
   BarChart3,
-  FileText
+  FileText,
+  ArrowLeft
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -275,9 +276,20 @@ export default function FinancialPage() {
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Financial Management</h1>
-          <p className="text-gray-600">Manage society fees, payments, and financial reports</p>
+        <div className="flex items-center space-x-4">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.location.href = "/"}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Home</span>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Financial Management</h1>
+            <p className="text-gray-600">Manage society fees, payments, and financial reports</p>
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Home, Calendar, Settings, Shield, Users, MessageSquare } from "lucide-react";
+import { Home, Calendar, Settings, Shield, Users, MessageSquare, UserCheck, Building } from "lucide-react";
 
 interface BottomNavProps {
   activeTab: string;
@@ -12,26 +12,30 @@ export function BottomNav({ activeTab, onTabChange, userRole }: BottomNavProps) 
   const getTabs = () => {
     if (userRole === 'watchman') {
       return [
+        { id: 'home', label: 'Home', icon: Home },
         { id: 'watchman', label: 'Dashboard', icon: Shield },
-        { id: 'community', label: 'Community', icon: Home },
+        { id: 'visitors', label: 'Visitors', icon: UserCheck },
+        { id: 'community', label: 'Community', icon: Building },
         { id: 'services', label: 'Services', icon: Settings },
       ];
     }
 
     if (userRole === 'admin' || userRole === 'super_admin') {
       return [
+        { id: 'home', label: 'Home', icon: Home },
+        { id: 'bookings', label: 'Bookings', icon: Calendar },
         { id: 'admin', label: 'Admin', icon: Users },
-        { id: 'community', label: 'Community', icon: Home },
-        { id: 'messages', label: 'Messages', icon: MessageSquare },
+        { id: 'community', label: 'Community', icon: Building },
         { id: 'services', label: 'Services', icon: Settings },
       ];
     }
 
     // Regular resident navigation
     return [
-      { id: 'community', label: 'Community', icon: Home },
+      { id: 'home', label: 'Home', icon: Home },
       { id: 'bookings', label: 'Bookings', icon: Calendar },
-      { id: 'messages', label: 'Messages', icon: MessageSquare },
+      { id: 'community', label: 'Community', icon: Building },
+      { id: 'visitors', label: 'Visitors', icon: UserCheck },
       { id: 'services', label: 'Services', icon: Settings },
     ];
   };

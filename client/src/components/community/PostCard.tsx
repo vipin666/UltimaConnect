@@ -83,7 +83,7 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 {getStatusBadge(post.status)}
                 <span className="text-xs text-gray-500">
-                  {post.author.unitNumber ? `Unit ${post.author.unitNumber}` : 'Admin'} • {format(new Date(post.createdAt!), 'MMM d')}
+                  {post.author?.unitNumber ? `Unit ${post.author.unitNumber}` : 'Admin'} • {format(new Date(post.createdAt!), 'MMM d')}
                 </span>
               </div>
             </div>
@@ -103,6 +103,30 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
             <p className="text-gray-600 text-sm mb-3" data-testid={`text-content-${post.id}`}>
               {post.content}
             </p>
+            
+            {/* Admin Comment Display */}
+            {post.adminComment && (
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mb-3 rounded-r-md">
+                <div className="flex items-start space-x-2">
+                  <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="w-3 h-3 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="text-xs font-medium text-blue-800">Admin Response</span>
+                      <Badge className="bg-blue-100 text-blue-800 text-xs">
+                        {post.status === 'resolved' ? 'Resolved' : 
+                         post.status === 'rejected' ? 'Rejected' : 
+                         post.status === 'frozen' ? 'Deferred' : 'Updated'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-blue-700" data-testid={`text-admin-comment-${post.id}`}>
+                      {post.adminComment}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             
             {post.type === 'event' && (
               <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
@@ -128,7 +152,7 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
                   data-testid={`button-like-${post.id}`}
                 >
                   <ThumbsUp className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{post.likes}</span>
+                  <span className="text-sm">{post.likes ?? 0}</span>
                 </Button>
                 
                 <Button
@@ -139,7 +163,7 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
                   data-testid={`button-comment-${post.id}`}
                 >
                   <MessageCircle className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{post.comments.length}</span>
+                  <span className="text-sm">{post.comments?.length ?? 0}</span>
                 </Button>
               </div>
             </div>

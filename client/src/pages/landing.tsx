@@ -1,20 +1,46 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building, Shield, Calendar, Users, AlertTriangle, MessageCircle, Heart } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Building, Shield, Calendar, Users, AlertTriangle, MessageCircle, Heart, MessageSquare, UserCheck, Fingerprint } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PostWithAuthor } from "@shared/schema";
 import { format } from "date-fns";
+import { useAuth } from "@/hooks/useAuth";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 export default function Landing() {
-  // Fetch complaint posts for public viewing
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
+
+
+  // Fetch all posts for residents to view and comment
+  const { data: allPosts = [], isLoading: postsLoading } = useQuery<PostWithAuthor[]>({
+    queryKey: ['/api/posts'],
+    queryFn: async () => {
+      const response = await fetch('/api/posts');
+      return response.json();
+    },
+    enabled: !isAdmin, // Only for residents
+  });
+
+  // Fetch complaint posts for public viewing (non-logged in users)
   const { data: complaints = [], isLoading } = useQuery<PostWithAuthor[]>({
     queryKey: ['/api/posts', { type: 'complaint' }],
     queryFn: async () => {
       const response = await fetch('/api/posts?type=complaint');
       return response.json();
     },
+    enabled: !user, // Only for non-logged in users
   });
+
+
+
+
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -45,7 +71,7 @@ export default function Landing() {
           </div>
           
           <Button 
-            onClick={() => window.location.href = '/api/login'}
+            onClick={() => window.location.href = '/login'}
             className="w-full bg-white text-primary hover:bg-gray-100 font-medium py-3"
             data-testid="button-login"
           >
@@ -117,6 +143,110 @@ export default function Landing() {
             )}
           </div>
 
+                    {/* Admin Quick Access */}
+          {isAdmin && (
+            <div className="mb-8">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Shield className="w-5 h-5 text-blue-500" />
+                    <h3 className="font-medium text-gray-800">Admin Quick Access</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      onClick={() => window.location.href = '/admin'}
+                      className="w-full bg-blue-600 text-white hover:bg-blue-700 py-3 rounded-lg font-medium"
+                      data-testid="button-admin-panel"
+                    >
+                      Admin Panel
+                    </Button>
+                    <Button
+                      onClick={() => window.location.href = '/financial'}
+                      className="w-full bg-green-600 text-white hover:bg-green-700 py-3 rounded-lg font-medium"
+                      data-testid="button-financial-management"
+                    >
+                      Financial
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Resident Dashboard Section */}
+          {user && !isAdmin && (
+            <div className="mb-8">
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-5 h-5 text-green-500" />
+                <h2 className="text-xl font-medium">Community Feed</h2>
+              </div>
+
+              {/* All Posts Section for Residents */}
+              <Card className="mb-4">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MessageSquare className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-medium text-gray-800">Recent Community Posts</h3>
+                  </div>
+                  
+                  {postsLoading ? (
+                    <div className="text-center py-4">
+                      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-sm text-gray-600">Loading posts...</p>
+                    </div>
+                  ) : allPosts.length > 0 ? (
+                    <div className="space-y-4">
+                      {allPosts.map((post) => (
+                        <div key={post.id} className="p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                          <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-medium text-gray-800">{post.title}</h4>
+                            <Badge className={post.type === 'complaint' ? 'bg-red-100 text-red-800' : 
+                                             post.type === 'general' ? 'bg-blue-100 text-blue-800' : 
+                                             'bg-green-100 text-green-800'}>
+                              {post.type}
+                            </Badge>
+                          </div>
+                          
+                          <p className="text-gray-600 text-sm mb-3 line-clamp-3">
+                            {post.content}
+                          </p>
+                          
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-1">
+                                <Heart className="w-4 h-4" />
+                                <span>{post.likes || 0}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <MessageCircle className="w-4 h-4" />
+                                <span>{post.comments?.length || 0} comments</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500">
+                                By {post.author?.firstName} {post.author?.lastName} {post.author?.unitNumber && `(${post.author.unitNumber})`}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {post.createdAt ? format(new Date(post.createdAt), 'MMM d, yyyy') : 'Unknown date'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card>
+                      <CardContent className="p-6 text-center">
+                        <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                        <p className="text-gray-500">No posts found</p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {/* Features Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card className="text-center">
@@ -149,6 +279,8 @@ export default function Landing() {
           </div>
         </div>
       </div>
+
+
     </div>
   );
 }

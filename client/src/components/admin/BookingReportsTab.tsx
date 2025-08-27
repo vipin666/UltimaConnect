@@ -220,7 +220,7 @@ export function BookingReportsTab() {
                 <div key={booking.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{booking.amenity?.name}</span>
+                                              <span className="font-medium">{booking.amenityName}</span>
                       <Badge 
                         className={
                           booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :

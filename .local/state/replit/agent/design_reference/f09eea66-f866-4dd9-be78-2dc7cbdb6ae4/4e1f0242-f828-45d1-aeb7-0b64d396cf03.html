@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building Management App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1976D2',
+                        secondary: '#388E3C',
+                        accent: '#F57C00',
+                        surface: '#FFFFFF',
+                        background: '#FAFAFA',
+                        error: '#D32F2F'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-background font-sans">
+    <!-- @COMPONENT: MobileAppContainer -->
+    <div class="max-w-sm mx-auto bg-white min-h-screen relative">
+        
+        <!-- @COMPONENT: LoginScreen [initial state] -->
+        <div id="loginScreen" class="h-screen flex flex-col">
+            <!-- Header -->
+            <div class="bg-primary text-white p-6 pt-12">
+                <div class="text-center">
+                    <i class="fas fa-building text-4xl mb-3"></i>
+                    <h1 class="text-2xl font-bold">Skyline Towers</h1>
+                    <p class="text-blue-100 text-sm">Building Management System</p>
+                </div>
+            </div>
+
+            <!-- Login Form -->
+            <div class="flex-1 p-6">
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-2">Welcome Back</h2>
+                    <p class="text-gray-600 text-sm">Sign in to access your building community</p>
+                </div>
+
+                <form class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Email or Unit Number</label>
+                        <input type="text" data-bind="loginCredentials.identifier" placeholder="Enter email or unit number" 
+                               class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                        <input type="password" data-bind="loginCredentials.password" placeholder="Enter password"
+                               class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center">
+                            <input type="checkbox" class="rounded border-gray-300 text-primary focus:ring-primary">
+                            <span class="ml-2 text-sm text-gray-600">Remember me</span>
+                        </label>
+                        <a href="#" class="text-sm text-primary hover:underline">Forgot password?</a>
+                    </div>
+
+                    <button type="button" onclick="showDashboard()" data-event="click:handleLogin"
+                            class="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                        Sign In
+                    </button>
+                </form>
+
+                <div class="mt-6 text-center">
+                    <p class="text-sm text-gray-600">Need access? <a href="#" class="text-primary hover:underline">Contact Admin</a></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- @COMPONENT: MainDashboard [hidden by default] -->
+        <div id="mainDashboard" class="hidden">
+            
+            <!-- @COMPONENT: TopNavigation -->
+            <header class="bg-white shadow-sm border-b border-gray-100 p-4 pt-12">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-lg font-semibold text-gray-800" data-bind="user.greeting">Good Morning, John</h1>
+                        <p class="text-sm text-gray-600" data-bind="user.unit">Unit 8B, Floor 8</p>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <button class="relative p-2" data-event="click:showNotifications">
+                            <i class="fas fa-bell text-gray-600"></i>
+                            <span class="absolute -top-1 -right-1 bg-accent text-white text-xs rounded-full w-5 h-5 flex items-center justify-center" data-bind="notifications.count">3</span>
+                        </button>
+                        <button class="p-2" data-event="click:showProfile">
+                            <!-- Profile photo placeholder for user avatar -->
+                            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=100&h=100" 
+                                 alt="User Profile" class="w-8 h-8 rounded-full">
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- @COMPONENT: CommunityFeed -->
+            <main class="pb-20 custom-scrollbar" style="height: calc(100vh - 140px); overflow-y: auto;">
+                <!-- Quick Actions -->
+                <div class="p-4">
+                    <h2 class="text-lg font-semibold text-gray-800 mb-3">Quick Actions</h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="showBookingScreen()" class="bg-primary text-white p-4 rounded-xl flex flex-col items-center space-y-2 hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-calendar-check text-xl"></i>
+                            <span class="text-sm font-medium">Book Amenities</span>
+                        </button>
+                        <button onclick="showComplaintForm()" class="bg-secondary text-white p-4 rounded-xl flex flex-col items-center space-y-2 hover:bg-green-700 transition-colors">
+                            <i class="fas fa-exclamation-circle text-xl"></i>
+                            <span class="text-sm font-medium">Report Issue</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Community Posts -->
+                <div class="px-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-lg font-semibold text-gray-800">Community Feed</h2>
+                        <button onclick="showCreatePost()" class="text-primary text-sm font-medium">
+                            <i class="fas fa-plus mr-1"></i>New Post
+                        </button>
+                    </div>
+
+                    <!-- @MAP: posts.map(post => ( -->
+                    <div class="space-y-4">
+                        <!-- Event Post -->
+                        <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+                            <div class="p-4">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-accent text-white p-2 rounded-lg">
+                                        <i class="fas fa-calendar"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <h3 class="font-semibold text-gray-800">Building Maintenance Notice</h3>
+                                            <span class="text-xs text-gray-500" data-mock="true">2h ago</span>
+                                        </div>
+                                        <p class="text-sm text-gray-600 mt-1" data-mock="true">Water supply will be temporarily shut off on Floor 5-8 tomorrow from 10 AM to 2 PM for plumbing maintenance.</p>
+                                        <div class="flex items-center space-x-4 mt-3">
+                                            <button class="flex items-center space-x-1 text-gray-500 hover:text-primary">
+                                                <i class="far fa-comment text-sm"></i>
+                                                <span class="text-sm" data-bind="post.commentCount">5</span>
+                                            </button>
+                                            <button class="flex items-center space-x-1 text-gray-500 hover:text-secondary">
+                                                <i class="far fa-thumbs-up text-sm"></i>
+                                                <span class="text-sm" data-bind="post.likeCount">12</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Complaint Post -->
+                        <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+                            <div class="p-4">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-error text-white p-2 rounded-lg">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <h3 class="font-semibold text-gray-800">Elevator Issue - Floor 12</h3>
+                                            <span class="bg-accent text-white text-xs px-2 py-1 rounded-full">Open</span>
+                                        </div>
+                                        <p class="text-sm text-gray-600 mt-1" data-mock="true">The elevator on the east side is making unusual noises and seems to be operating slowly. Posted by Sarah M., Unit 12C</p>
+                                        <div class="flex items-center space-x-4 mt-3">
+                                            <button class="flex items-center space-x-1 text-gray-500 hover:text-primary">
+                                                <i class="far fa-comment text-sm"></i>
+                                                <span class="text-sm" data-bind="post.commentCount">8</span>
+                                            </button>
+                                            <button class="flex items-center space-x-1 text-gray-500 hover:text-secondary">
+                                                <i class="far fa-thumbs-up text-sm"></i>
+                                                <span class="text-sm" data-bind="post.likeCount">6</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Community Suggestion -->
+                        <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+                            <div class="p-4">
+                                <div class="flex items-start space-x-3">
+                                    <div class="bg-primary text-white p-2 rounded-lg">
+                                        <i class="fas fa-lightbulb"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <h3 class="font-semibold text-gray-800">Pool Area Enhancement</h3>
+                                            <span class="text-xs text-gray-500" data-mock="true">1d ago</span>
+                                        </div>
+                                        <p class="text-sm text-gray-600 mt-1" data-mock="true">Would love to see some additional seating and umbrellas around the pool area for better shade. What do others think?</p>
+                                        <div class="flex items-center space-x-4 mt-3">
+                                            <button class="flex items-center space-x-1 text-gray-500 hover:text-primary">
+                                                <i class="far fa-comment text-sm"></i>
+                                                <span class="text-sm" data-bind="post.commentCount">15</span>
+                                            </button>
+                                            <button class="flex items-center space-x-1 text-gray-500 hover:text-secondary">
+                                                <i class="far fa-thumbs-up text-sm"></i>
+                                                <span class="text-sm" data-bind="post.likeCount">23</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_MAP )) -->
+                </div>
+            </main>
+
+            <!-- @COMPONENT: BottomNavigation -->
+            <nav class="fixed bottom-0 left-1/2 transform -translate-x-1/2 w-full max-w-sm bg-white border-t border-gray-100">
+                <div class="flex items-center justify-around py-2">
+                    <button onclick="showDashboard()" class="flex flex-col items-center p-3 text-primary">
+                        <i class="fas fa-home text-lg"></i>
+                        <span class="text-xs mt-1 font-medium">Home</span>
+                    </button>
+                    <button onclick="showBookingScreen()" class="flex flex-col items-center p-3 text-gray-500 hover:text-primary">
+                        <i class="fas fa-calendar text-lg"></i>
+                        <span class="text-xs mt-1">Bookings</span>
+                    </button>
+                    <button onclick="showWatchmanModule()" class="flex flex-col items-center p-3 text-gray-500 hover:text-primary">
+                        <i class="fas fa-shield-alt text-lg"></i>
+                        <span class="text-xs mt-1">Security</span>
+                    </button>
+                    <button class="flex flex-col items-center p-3 text-gray-500 hover:text-primary">
+                        <i class="fas fa-user text-lg"></i>
+                        <span class="text-xs mt-1">Profile</span>
+                    </button>
+                </div>
+            </nav>
+        </div>
+
+        <!-- @COMPONENT: BookingScreen [hidden by default] -->
+        <div id="bookingScreen" class="hidden h-screen">
+            <header class="bg-primary text-white p-4 pt-12">
+                <div class="flex items-center">
+                    <button onclick="showDashboard()" class="mr-4">
+                        <i class="fas fa-arrow-left text-xl"></i>
+                    </button>
+                    <h1 class="text-lg font-semibold">Book Amenities</h1>
+                </div>
+            </header>
+
+            <div class="p-4 pb-20 custom-scrollbar" style="height: calc(100vh - 80px); overflow-y: auto;">
+                <!-- Amenities Grid -->
+                <div class="grid grid-cols-1 gap-4">
+                    <!-- Swimming Pool -->
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <!-- Swimming pool with clear blue water and modern deck -->
+                        <img src="https://images.unsplash.com/photo-1571902943202-507ec2618e8f?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=200" 
+                             alt="Swimming Pool" class="w-full h-32 object-cover">
+                        <div class="p-4">
+                            <h3 class="font-semibold text-gray-800">Swimming Pool</h3>
+                            <p class="text-sm text-gray-600 mt-1">Floor 1 • Available 6 AM - 10 PM</p>
+                            <div class="flex items-center justify-between mt-3">
+                                <span class="text-sm text-secondary font-medium">Available Today</span>
+                                <button onclick="showTimeSlots('pool')" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Book Now</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Party Hall -->
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <!-- Elegant party hall with modern lighting and setup -->
+                        <img src="https://images.unsplash.com/photo-1464366400600-7168b8af9bc3?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=200" 
+                             alt="Party Hall" class="w-full h-32 object-cover">
+                        <div class="p-4">
+                            <h3 class="font-semibold text-gray-800">Party Hall</h3>
+                            <p class="text-sm text-gray-600 mt-1">Floor 15 • Capacity 50 people</p>
+                            <div class="flex items-center justify-between mt-3">
+                                <span class="text-sm text-accent font-medium">2 bookings today</span>
+                                <button onclick="showTimeSlots('hall')" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Book Now</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pool Table -->
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <!-- Professional pool table in a well-lit room -->
+                        <img src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=200" 
+                             alt="Pool Table" class="w-full h-32 object-cover">
+                        <div class="p-4">
+                            <h3 class="font-semibold text-gray-800">Pool Table</h3>
+                            <p class="text-sm text-gray-600 mt-1">Recreation Room • 2-hour slots</p>
+                            <div class="flex items-center justify-between mt-3">
+                                <span class="text-sm text-secondary font-medium">Available Now</span>
+                                <button onclick="showTimeSlots('pooltable')" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium">Book Now</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gym -->
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                        <!-- Modern gym with equipment and good lighting -->
+                        <img src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=200" 
+                             alt="Gym" class="w-full h-32 object-cover">
+                        <div class="p-4">
+                            <h3 class="font-semibold text-gray-800">Gym</h3>
+                            <p class="text-sm text-gray-600 mt-1">Floor 2 • Open 24/7 for residents</p>
+                            <div class="flex items-center justify-between mt-3">
+                                <span class="text-sm text-secondary font-medium">Always Open</span>
+                                <button class="bg-gray-300 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium cursor-not-allowed">No Booking Required</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Guest Parking -->
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm">
+                        <div class="p-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="bg-accent text-white p-3 rounded-lg">
+                                    <i class="fas fa-car text-xl"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="font-semibold text-gray-800">Guest Parking</h3>
+                                    <p class="text-sm text-gray-600">3 spots available • Max 4 hours</p>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <div class="flex space-x-2 mb-3">
+                                    <div class="flex-1 bg-green-100 text-green-800 text-center py-2 rounded-lg text-sm font-medium">Spot 1: Available</div>
+                                    <div class="flex-1 bg-red-100 text-red-800 text-center py-2 rounded-lg text-sm font-medium">Spot 2: Occupied</div>
+                                    <div class="flex-1 bg-green-100 text-green-800 text-center py-2 rounded-lg text-sm font-medium">Spot 3: Available</div>
+                                </div>
+                                <button onclick="showParkingBooking()" class="w-full bg-primary text-white py-2 rounded-lg font-medium">Book Guest Parking</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- @COMPONENT: WatchmanModule [hidden by default] -->
+        <div id="watchmanModule" class="hidden h-screen">
+            <header class="bg-primary text-white p-4 pt-12">
+                <div class="flex items-center">
+                    <button onclick="showDashboard()" class="mr-4">
+                        <i class="fas fa-arrow-left text-xl"></i>
+                    </button>
+                    <h1 class="text-lg font-semibold">Security & Watchman</h1>
+                </div>
+            </header>
+
+            <div class="p-4 pb-20 custom-scrollbar" style="height: calc(100vh - 80px); overflow-y: auto;">
+                <!-- Current Status -->
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+                    <h3 class="font-semibold text-gray-800 mb-3">Current Status</h3>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 bg-secondary rounded-full"></div>
+                            <span class="text-sm text-gray-600">Watchman on duty</span>
+                        </div>
+                        <span class="text-sm font-medium text-gray-800" data-bind="watchman.currentShift">John D. (Day Shift)</span>
+                    </div>
+                </div>
+
+                <!-- Guest Notifications -->
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+                    <h3 class="font-semibold text-gray-800 mb-3">Recent Guest Notifications</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-start space-x-3">
+                            <div class="bg-primary text-white p-2 rounded-lg text-sm">
+                                <i class="fas fa-user-plus"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-800 font-medium" data-mock="true">Guest arrival for Unit 8B</p>
+                                <p class="text-xs text-gray-600" data-mock="true">Mr. Smith arrived at 2:30 PM • Parking Spot 1</p>
+                                <span class="text-xs text-gray-500">15 min ago</span>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="bg-accent text-white p-2 rounded-lg text-sm">
+                                <i class="fas fa-clock"></i>
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-800 font-medium" data-mock="true">Parking expires soon - Unit 12A</p>
+                                <p class="text-xs text-gray-600" data-mock="true">Guest parking expires in 30 minutes</p>
+                                <span class="text-xs text-gray-500">Just now</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions for Watchman -->
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+                    <h3 class="font-semibold text-gray-800 mb-3">Quick Actions</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button class="bg-secondary text-white p-3 rounded-lg text-center">
+                            <i class="fas fa-user-check text-lg mb-2"></i>
+                            <div class="text-sm font-medium">Log Guest Arrival</div>
+                        </button>
+                        <button class="bg-accent text-white p-3 rounded-lg text-center">
+                            <i class="fas fa-exclamation-triangle text-lg mb-2"></i>
+                            <div class="text-sm font-medium">Send Alert</div>
+                        </button>
+                        <button class="bg-primary text-white p-3 rounded-lg text-center">
+                            <i class="fas fa-car text-lg mb-2"></i>
+                            <div class="text-sm font-medium">Parking Status</div>
+                        </button>
+                        <button class="bg-gray-600 text-white p-3 rounded-lg text-center">
+                            <i class="fas fa-clipboard-list text-lg mb-2"></i>
+                            <div class="text-sm font-medium">Daily Log</div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- @COMPONENT: ComplaintForm [hidden by default] -->
+        <div id="complaintForm" class="hidden h-screen">
+            <header class="bg-primary text-white p-4 pt-12">
+                <div class="flex items-center">
+                    <button onclick="showDashboard()" class="mr-4">
+                        <i class="fas fa-arrow-left text-xl"></i>
+                    </button>
+                    <h1 class="text-lg font-semibold">Report Issue</h1>
+                </div>
+            </header>
+
+            <div class="p-4 pb-20">
+                <form class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Issue Category</label>
+                        <select class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option>Select category...</option>
+                            <option>Maintenance</option>
+                            <option>Elevator</option>
+                            <option>Cleaning</option>
+                            <option>Security</option>
+                            <option>Parking</option>
+                            <option>Noise Complaint</option>
+                            <option>Other</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                        <input type="text" placeholder="Brief description of the issue" 
+                               class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea rows="4" placeholder="Provide detailed information about the issue..." 
+                                  class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Location/Floor</label>
+                        <input type="text" placeholder="e.g., Floor 8, East Elevator" 
+                               class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Priority Level</label>
+                        <div class="grid grid-cols-3 gap-3">
+                            <button type="button" class="p-3 border border-gray-200 rounded-lg text-center hover:bg-green-50 hover:border-green-300">
+                                <div class="text-secondary text-sm font-medium">Low</div>
+                                <div class="text-xs text-gray-600">Can wait</div>
+                            </button>
+                            <button type="button" class="p-3 border border-accent rounded-lg text-center bg-orange-50">
+                                <div class="text-accent text-sm font-medium">Medium</div>
+                                <div class="text-xs text-gray-600">Soon as possible</div>
+                            </button>
+                            <button type="button" class="p-3 border border-gray-200 rounded-lg text-center hover:bg-red-50 hover:border-red-300">
+                                <div class="text-error text-sm font-medium">High</div>
+                                <div class="text-xs text-gray-600">Urgent</div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="pt-4">
+                        <button type="submit" data-event="click:submitComplaint" 
+                                class="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                            Submit Complaint
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+    <!-- @END_COMPONENT: MobileAppContainer -->
+
+    <script>
+        // @FUNCTIONALITY: Navigation state management for mobile app screens
+        (function() {
+            // TODO: Implement React state management for screen navigation
+            function hideAllScreens() {
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainDashboard').classList.add('hidden');
+                document.getElementById('bookingScreen').classList.add('hidden');
+                document.getElementById('watchmanModule').classList.add('hidden');
+                document.getElementById('complaintForm').classList.add('hidden');
+            }
+
+            window.showDashboard = function() {
+                hideAllScreens();
+                document.getElementById('mainDashboard').classList.remove('hidden');
+            };
+
+            window.showBookingScreen = function() {
+                hideAllScreens();
+                document.getElementById('bookingScreen').classList.remove('hidden');
+            };
+
+            window.showWatchmanModule = function() {
+                hideAllScreens();
+                document.getElementById('watchmanModule').classList.remove('hidden');
+            };
+
+            window.showComplaintForm = function() {
+                hideAllScreens();
+                document.getElementById('complaintForm').classList.remove('hidden');
+            };
+
+            window.showTimeSlots = function(amenity) {
+                // TODO: Implement time slot booking modal
+                alert(`Booking ${amenity} - Time slot selection would open here`);
+            };
+
+            window.showParkingBooking = function() {
+                // TODO: Implement guest parking booking flow
+                alert('Guest parking booking form would open here');
+            };
+
+            window.showCreatePost = function() {
+                // TODO: Implement post creation modal
+                alert('Create new post form would open here');
+            };
+        })();
+    </script>
+</body>
+</html>

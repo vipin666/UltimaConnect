@@ -1,1565 +1,1108 @@
-import {
-  users,
-  posts,
-  comments,
-  amenities,
-  bookings,
-  guestNotifications,
-  messages,
-  announcements,
-  maintenanceRequests,
-  biometricRequests,
-  tenantDocuments,
-  passwordResetTokens,
-  type User,
-  type UpsertUser,
-  type Post,
-  type InsertPost,
-  type PostWithAuthor,
-  type Comment,
-  type InsertComment,
-  type Amenity,
-  type Booking,
-  type InsertBooking,
-  type BookingWithAmenity,
-  type GuestNotification,
-  type InsertGuestNotification,
-  type GuestNotificationWithUser,
-  type Message,
-  type InsertMessage,
-  type MessageWithUsers,
-  type Announcement,
-  type InsertAnnouncement,
-  type AnnouncementWithAuthor,
-  type MaintenanceRequest,
-  type InsertMaintenanceRequest,
-  type MaintenanceRequestWithUsers,
-  type BiometricRequest,
-  type BiometricRequestWithUser,
-  type InsertBiometricRequest,
-  type TenantDocument,
-  type TenantDocumentWithUser,
-  type InsertTenantDocument,
-  type PasswordResetToken,
-  type InsertPasswordResetToken,
-  type BookingReport,
-  type FeeType,
-  type InsertFeeType,
-  type FeeSchedule,
-  type InsertFeeSchedule,
-  type FeeTransaction,
-  type InsertFeeTransaction,
-  type Payment,
-  type InsertPayment,
-  type FeeTransactionWithDetails,
-  type PaymentWithDetails,
-  type FinancialSummary,
-  feeTypes,
-  feeSchedules,
-  feeTransactions,
-  payments,
-} from "@shared/schema";
-import { db } from "./db";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import sqlite3 from 'sqlite3';
+import { hashPassword, comparePasswords } from './auth';
+
+// Create SQLite database connection
+const dbPath = './tower-connect.db';
+const sqlite = new sqlite3.Database(dbPath);
 
 export interface IStorage {
   // User operations (required for Replit Auth)
-  getUser(id: string): Promise<User | undefined>;
-  upsertUser(user: UpsertUser): Promise<User>;
+  getUser(id: string): Promise<any | undefined>;
+  upsertUser(user: any): Promise<any>;
   
   // Local authentication
-  getUserByUsername(username: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: UpsertUser): Promise<User>;
-  updateUserPassword(userId: string, hashedPassword: string): Promise<User>;
+  getUserByUsername(username: string): Promise<any | undefined>;
+  getUserByEmail(email: string): Promise<any | undefined>;
+  getUsersByRole(role: string): Promise<any[]>;
+  createUser(user: any): Promise<any>;
+  updateUserPassword(userId: string, hashedPassword: string): Promise<any>;
+  updateUser(id: string, updates: any): Promise<any>;
+  deleteUser(id: string): Promise<void>;
   
   // Password reset
-  createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken>;
-  getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined>;
+  createPasswordResetToken(token: any): Promise<any>;
+  getPasswordResetToken(token: string): Promise<any | undefined>;
   markTokenAsUsed(tokenId: string): Promise<void>;
   
   // User management
-  getAllUsers(): Promise<User[]>;
-  updateUserStatus(userId: string, status: 'active' | 'pending' | 'suspended'): Promise<User>;
-  updateUserRole(userId: string, role: 'resident' | 'admin' | 'super_admin' | 'watchman'): Promise<User>;
+  getAllUsers(): Promise<any[]>;
+  updateUser(userId: string, updates: any): Promise<any>;
+  updateUserStatus(userId: string, status: string): Promise<any>;
+  deleteUser(userId: string): Promise<void>;
   
   // Post operations
-  createPost(post: InsertPost): Promise<Post>;
-  getAllPosts(): Promise<PostWithAuthor[]>;
-  getPostsByType(type: string): Promise<PostWithAuthor[]>;
-  updatePostStatus(postId: string, status: 'active' | 'resolved' | 'frozen'): Promise<Post>;
-  likePost(postId: string): Promise<Post>;
+  getPosts(): Promise<any[]>;
+  getPostsByType(type: string): Promise<any[]>;
+  getPost(id: string): Promise<any | undefined>;
+  createPost(post: any): Promise<any>;
+  updatePost(id: string, updates: any): Promise<any>;
+  updatePostStatus(id: string, status: string): Promise<any>;
+  deletePost(id: string): Promise<void>;
+  likePost(postId: string, userId: string): Promise<any>;
   
   // Comment operations
-  createComment(comment: InsertComment): Promise<Comment>;
-  getCommentsByPostId(postId: string): Promise<Comment[]>;
+  getComments(postId: string): Promise<any[]>;
+  getComment(id: string): Promise<any | undefined>;
+  createComment(comment: any): Promise<any>;
+  deleteComment(id: string): Promise<void>;
   
   // Amenity operations
-  getAllAmenities(): Promise<Amenity[]>;
-  getAmenityById(id: string): Promise<Amenity | undefined>;
+  getAmenities(): Promise<any[]>;
+  getAmenity(id: string): Promise<any | undefined>;
+  createAmenity(amenity: any): Promise<any>;
+  updateAmenity(id: string, updates: any): Promise<any>;
+  deleteAmenity(id: string): Promise<void>;
   
   // Booking operations
-  createBooking(booking: InsertBooking): Promise<Booking>;
-  getUserBookings(userId: string): Promise<BookingWithAmenity[]>;
-  getBookingsByAmenityAndDate(amenityId: string, date: string): Promise<Booking[]>;
-  cancelBooking(bookingId: string): Promise<Booking>;
+  getBookings(): Promise<any[]>;
+  getBooking(id: string): Promise<any | undefined>;
+  createBooking(booking: any): Promise<any>;
+  updateBooking(id: string, updates: any): Promise<any>;
+  deleteBooking(id: string): Promise<void>;
+  getBookingsByUser(userId: string): Promise<any[]>;
+  getUserBookings(userId: string): Promise<any[]>;
+  getBookingsByAmenity(amenityId: string): Promise<any[]>;
+  getBookingsByAmenityAndDate(amenityId: string, date: string): Promise<any[]>;
+  cancelBooking(bookingId: string): Promise<any>;
+  rejectBooking(bookingId: string, reason?: string): Promise<any>;
   
   // Guest notification operations
-  createGuestNotification(notification: InsertGuestNotification): Promise<GuestNotification>;
-  getUserGuestNotifications(userId: string): Promise<GuestNotificationWithUser[]>;
-  getAllActiveGuestNotifications(): Promise<GuestNotificationWithUser[]>;
-  updateGuestNotification(notificationId: string, updates: Partial<GuestNotification>): Promise<GuestNotification>;
+  getGuestNotifications(): Promise<any[]>;
+  getUserGuestNotifications(userId: string): Promise<any[]>;
+  createGuestNotification(notification: any): Promise<any>;
+  updateGuestNotification(id: string, updates: any): Promise<any>;
+  deleteGuestNotification(id: string): Promise<void>;
   
   // Message operations
-  createMessage(message: InsertMessage): Promise<Message>;
-  getUserMessages(userId: string): Promise<MessageWithUsers[]>;
-  markMessageAsRead(messageId: string): Promise<Message>;
+  getMessages(): Promise<any[]>;
+  createMessage(message: any): Promise<any>;
+  deleteMessage(id: string): Promise<void>;
+  markMessageAsRead(messageId: string): Promise<any>;
   
   // Announcement operations
-  createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
-  getAnnouncementsForRole(role: string): Promise<AnnouncementWithAuthor[]>;
-  getAllAnnouncements(): Promise<AnnouncementWithAuthor[]>;
+  getAnnouncements(): Promise<any[]>;
+  getAnnouncementsForRole(role: string): Promise<any[]>;
+  createAnnouncement(announcement: any): Promise<any>;
+  updateAnnouncement(id: string, updates: any): Promise<any>;
+  deleteAnnouncement(id: string): Promise<void>;
   
   // Maintenance request operations
-  createMaintenanceRequest(request: InsertMaintenanceRequest): Promise<MaintenanceRequest>;
-  getUserMaintenanceRequests(userId: string): Promise<MaintenanceRequestWithUsers[]>;
-  getAllMaintenanceRequests(): Promise<MaintenanceRequestWithUsers[]>;
-  updateMaintenanceRequestStatus(requestId: string, status: string, assignedTo?: string): Promise<MaintenanceRequest>;
+  getMaintenanceRequests(): Promise<any[]>;
+  createMaintenanceRequest(request: any): Promise<any>;
+  updateMaintenanceRequest(id: string, updates: any): Promise<any>;
+  deleteMaintenanceRequest(id: string): Promise<void>;
   
   // Biometric request operations
-  createBiometricRequest(request: InsertBiometricRequest): Promise<BiometricRequest>;
-  getBiometricRequests(): Promise<BiometricRequestWithUser[]>;
-  getBiometricRequestsByUserId(userId: string): Promise<BiometricRequestWithUser[]>;
-  updateBiometricRequest(id: string, updates: Partial<BiometricRequest>): Promise<BiometricRequest | undefined>;
+  getBiometricRequests(): Promise<any[]>;
+  getBiometricRequestsByUserId(userId: string): Promise<any[]>;
+  createBiometricRequest(request: any): Promise<any>;
+  updateBiometricRequest(id: string, updates: any): Promise<any>;
+  deleteBiometricRequest(id: string): Promise<void>;
+  enableBiometricAccess(userId: string, requestType: string, accessLevel: string): Promise<any>;
+  disableBiometricAccess(userId: string): Promise<any>;
+  getUserBiometricStatus(userId: string): Promise<any>;
+  
+  // Flat management operations
+  getFlats(): Promise<any[]>;
+  getFlat(id: string): Promise<any>;
+  createFlat(flat: any): Promise<any>;
+  updateFlat(id: string, updates: any): Promise<any>;
+  deleteFlat(id: string): Promise<void>;
+  assignFlatToUser(flatId: string, userId: string, isOwner: boolean): Promise<any>;
+  unassignFlatFromUser(flatId: string): Promise<any>;
+  getUniqueUnitNumbers(): Promise<any[]>;
   
   // Tenant document operations
-  createTenantDocument(document: InsertTenantDocument): Promise<TenantDocument>;
-  getTenantDocuments(): Promise<TenantDocumentWithUser[]>;
-  getTenantDocumentsByUserId(userId: string): Promise<TenantDocumentWithUser[]>;
-  updateTenantDocument(id: string, updates: Partial<TenantDocument>): Promise<TenantDocument | undefined>;
+  getTenantDocuments(): Promise<any[]>;
+  createTenantDocument(document: any): Promise<any>;
+  updateTenantDocument(id: string, updates: any): Promise<any>;
+  deleteTenantDocument(id: string): Promise<void>;
   
-  // Booking report operations
-  getBookingReport(): Promise<BookingReport>;
-  
-  // Financial Management operations
-  // Fee Types
-  createFeeType(feeType: InsertFeeType): Promise<FeeType>;
-  getAllFeeTypes(): Promise<FeeType[]>;
-  updateFeeType(id: string, updates: Partial<InsertFeeType>): Promise<FeeType>;
+  // Financial operations
+  getFeeTypes(): Promise<any[]>;
+  createFeeType(feeType: any): Promise<any>;
+  updateFeeType(id: string, updates: any): Promise<any>;
   deleteFeeType(id: string): Promise<void>;
   
-  // Fee Schedules
-  createFeeSchedule(schedule: InsertFeeSchedule): Promise<FeeSchedule>;
-  getAllFeeSchedules(): Promise<FeeSchedule[]>;
-  getFeeSchedulesByType(feeTypeId: string): Promise<FeeSchedule[]>;
-  updateFeeSchedule(id: string, updates: Partial<InsertFeeSchedule>): Promise<FeeSchedule>;
+  getFeeSchedules(): Promise<any[]>;
+  createFeeSchedule(schedule: any): Promise<any>;
+  updateFeeSchedule(id: string, updates: any): Promise<any>;
   deleteFeeSchedule(id: string): Promise<void>;
   
-  // Fee Transactions
-  createFeeTransaction(transaction: InsertFeeTransaction): Promise<FeeTransaction>;
-  getFeeTransactionsByUser(userId: string): Promise<FeeTransactionWithDetails[]>;
-  getAllFeeTransactions(): Promise<FeeTransactionWithDetails[]>;
-  getFeeTransactionById(id: string): Promise<FeeTransactionWithDetails | undefined>;
-  updateFeeTransactionStatus(id: string, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<FeeTransaction>;
-  generateMonthlyFees(month: string, year: string): Promise<FeeTransaction[]>;
+  getFeeTransactions(): Promise<any[]>;
+  getFeeTransactionsByUser(userId: string): Promise<any[]>;
+  createFeeTransaction(transaction: any): Promise<any>;
+  updateFeeTransaction(id: string, updates: any): Promise<any>;
+  deleteFeeTransaction(id: string): Promise<void>;
   
-  // Payments
-  createPayment(payment: InsertPayment): Promise<Payment>;
-  getPaymentsByUser(userId: string): Promise<PaymentWithDetails[]>;
-  getAllPayments(): Promise<PaymentWithDetails[]>;
-  getPaymentsByTransaction(transactionId: string): Promise<Payment[]>;
+  getPayments(): Promise<any[]>;
+  getPaymentsByUser(userId: string): Promise<any[]>;
+  createPayment(payment: any): Promise<any>;
+  updatePayment(id: string, updates: any): Promise<any>;
+  deletePayment(id: string): Promise<void>;
   
-  // Financial Reports
-  getFinancialSummary(): Promise<FinancialSummary>;
-  getMonthlyCollectionReport(month: string, year: string): Promise<{
-    totalDue: string;
-    totalCollected: string;
-    collectionPercentage: number;
-    pendingAmount: string;
-  }>;
+  getPaymentNotifications(): Promise<any[]>;
+  createPaymentNotification(notification: any): Promise<any>;
+  updatePaymentNotification(id: string, updates: any): Promise<any>;
+  deletePaymentNotification(id: string): Promise<void>;
+  
+  getPaymentSchedules(): Promise<any[]>;
+  createPaymentSchedule(schedule: any): Promise<any>;
+  updatePaymentSchedule(id: string, updates: any): Promise<any>;
+  deletePaymentSchedule(id: string): Promise<void>;
+  
+  getDefaulterTracking(): Promise<any[]>;
+  createDefaulterTracking(tracking: any): Promise<any>;
+  updateDefaulterTracking(id: string, updates: any): Promise<any>;
+  deleteDefaulterTracking(id: string): Promise<void>;
+  
+  // Visitor operations
+  getVisitors(): Promise<any[]>;
+  getVisitorsByWatchman(watchmanId: string): Promise<any[]>;
+  getVisitorsForHost(hostUserId: string): Promise<any[]>;
+  getVisitorsByStatus(status: string): Promise<any[]>;
+  getGuestParkingBookings(): Promise<any[]>;
+  getGuestParkingBookingsByUser(userId: string): Promise<any[]>;
+  getVisitor(id: string): Promise<any>;
+  createVisitor(visitor: any): Promise<any>;
+  updateVisitor(id: string, updates: any): Promise<any>;
+  deleteVisitor(id: string): Promise<void>;
+  
+  getVisitorNotifications(): Promise<any[]>;
+  createVisitorNotification(notification: any): Promise<any>;
+  updateVisitorNotification(id: string, updates: any): Promise<any>;
+  deleteVisitorNotification(id: string): Promise<void>;
 }
 
-export class DatabaseStorage implements IStorage {
-  // User operations (required for Replit Auth)
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
+// Helper function to run SQLite queries
+function runQuery<T>(query: string, params: any[] = []): Promise<T> {
+  return new Promise((resolve, reject) => {
+    sqlite.get(query, params, (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row as T);
+      }
+    });
+  });
+}
 
-  async upsertUser(userData: UpsertUser): Promise<User> {
-    // First check if user exists by email
-    const [existingUser] = await db.select().from(users).where(eq(users.email, userData.email || ''));
-    
+function runQueryAll<T>(query: string, params: any[] = []): Promise<T[]> {
+  return new Promise((resolve, reject) => {
+    sqlite.all(query, params, (err, rows) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(rows as T[]);
+      }
+    });
+  });
+}
+
+function runQueryRun(query: string, params: any[] = []): Promise<void> {
+  return new Promise((resolve, reject) => {
+    sqlite.run(query, params, function(err) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+export const storage: IStorage = {
+  // User operations
+  async getUser(id: string) {
+    return runQuery('SELECT * FROM users WHERE id = ?', [id]);
+  },
+
+  async upsertUser(user: any) {
+    const existingUser = await this.getUser(user.id);
     if (existingUser) {
-      // Update existing user
-      const [user] = await db
-        .update(users)
-        .set({
-          ...userData,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, existingUser.id))
-        .returning();
-      return user;
+      await runQueryRun(
+        'UPDATE users SET username = ?, firstName = ?, lastName = ?, email = ?, unitNumber = ?, role = ?, status = ?, isOwner = ?, profileImageUrl = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+        [user.username, user.firstName, user.lastName, user.email, user.unitNumber, user.role, user.status, user.isOwner, user.profileImageUrl, user.id]
+      );
+      return this.getUser(user.id);
     } else {
-      // Create new user
-      const [user] = await db
-        .insert(users)
-        .values(userData)
-        .returning();
-      return user;
+      return this.createUser(user);
     }
-  }
+  },
 
-  // Local authentication
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
-  }
+  async getUserByUsername(username: string) {
+    return runQuery('SELECT * FROM users WHERE username = ?', [username.toLowerCase()]);
+  },
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user;
-  }
+  async getUserByEmail(email: string) {
+    return runQuery('SELECT * FROM users WHERE email = ?', [email]);
+  },
 
-  async createUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(userData).returning();
-    return user;
-  }
+  async getUsersByRole(role: string) {
+    return runQueryAll('SELECT * FROM users WHERE role = ?', [role]);
+  },
 
-  async updateUserPassword(userId: string, hashedPassword: string): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({ password: hashedPassword, updatedAt: new Date() })
-      .where(eq(users.id, userId))
-      .returning();
-    return user;
-  }
+  async createUser(user: any) {
+    const id = user.id || `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      'INSERT INTO users (id, username, password, firstName, lastName, email, unitNumber, role, status, isOwner, profileImageUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [id, user.username.toLowerCase(), user.password, user.firstName, user.lastName, user.email, user.unitNumber, user.role, user.status, user.isOwner, user.profileImageUrl]
+    );
+    return this.getUser(id);
+  },
 
-  // Password reset
-  async createPasswordResetToken(token: InsertPasswordResetToken): Promise<PasswordResetToken> {
-    const [resetToken] = await db.insert(passwordResetTokens).values(token).returning();
-    return resetToken;
-  }
+  async updateUserPassword(userId: string, hashedPassword: string) {
+    await runQueryRun('UPDATE users SET password = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [hashedPassword, userId]);
+    return this.getUser(userId);
+  },
 
-  async getPasswordResetToken(token: string): Promise<PasswordResetToken | undefined> {
-    const [resetToken] = await db
-      .select()
-      .from(passwordResetTokens)
-      .where(eq(passwordResetTokens.token, token));
-    return resetToken;
-  }
+  async updateUser(id: string, updates: any) {
+    const fields = [];
+    const values = [];
+    
+    if (updates.firstName !== undefined) {
+      fields.push('firstName = ?');
+      values.push(updates.firstName);
+    }
+    if (updates.lastName !== undefined) {
+      fields.push('lastName = ?');
+      values.push(updates.lastName);
+    }
+    if (updates.username !== undefined) {
+      fields.push('username = ?');
+      values.push(updates.username.toLowerCase());
+    }
+    if (updates.email !== undefined) {
+      fields.push('email = ?');
+      values.push(updates.email);
+    }
+    if (updates.phone !== undefined) {
+      fields.push('phone = ?');
+      values.push(updates.phone);
+    }
+    if (updates.role !== undefined) {
+      fields.push('role = ?');
+      values.push(updates.role);
+    }
+    if (updates.unitNumber !== undefined) {
+      fields.push('unitNumber = ?');
+      values.push(updates.unitNumber);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = ?');
+      values.push(updates.status);
+    }
+    
+    if (fields.length === 0) {
+      return this.getUser(id);
+    }
+    
+    fields.push('updatedAt = CURRENT_TIMESTAMP');
+    values.push(id);
+    
+    await runQueryRun(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
+    return this.getUser(id);
+  },
 
-  async markTokenAsUsed(tokenId: string): Promise<void> {
-    await db
-      .update(passwordResetTokens)
-      .set({ used: true })
-      .where(eq(passwordResetTokens.id, tokenId));
-  }
+  async deleteUser(id: string) {
+    await runQueryRun('DELETE FROM users WHERE id = ?', [id]);
+  },
+
+  // Password reset operations
+  async createPasswordResetToken(token: any) {
+    const id = `token-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      'INSERT INTO passwordResetTokens (id, userId, token, expiresAt) VALUES (?, ?, ?, ?)',
+      [id, token.userId, token.token, token.expiresAt]
+    );
+    return runQuery('SELECT * FROM passwordResetTokens WHERE id = ?', [id]);
+  },
+
+  async getPasswordResetToken(token: string) {
+    return runQuery('SELECT * FROM passwordResetTokens WHERE token = ? AND expiresAt > CURRENT_TIMESTAMP AND used = 0', [token]);
+  },
+
+  async markTokenAsUsed(tokenId: string) {
+    await runQueryRun('UPDATE passwordResetTokens SET used = 1 WHERE id = ?', [tokenId]);
+  },
 
   // User management
-  async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users);
-  }
+  async getAllUsers() {
+    return runQueryAll('SELECT * FROM users ORDER BY createdAt DESC');
+  },
 
-  async updateUserStatus(userId: string, status: 'active' | 'pending' | 'suspended'): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(users.id, userId))
-      .returning();
-    return user;
-  }
-
-  async updateUserRole(userId: string, role: 'resident' | 'admin' | 'super_admin' | 'watchman'): Promise<User> {
-    const [user] = await db
-      .update(users)
-      .set({ role, updatedAt: new Date() })
-      .where(eq(users.id, userId))
-      .returning();
-    return user;
-  }
+  async updateUserStatus(userId: string, status: string) {
+    await runQueryRun(`UPDATE users SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`, [status, userId]);
+    return this.getUser(userId);
+  },
 
   // Post operations
-  async createPost(post: InsertPost): Promise<Post> {
-    const [newPost] = await db.insert(posts).values(post).returning();
-    return newPost;
-  }
+  async getPosts() {
+    return runQueryAll(`
+      SELECT p.*, u.firstName, u.lastName, u.username 
+      FROM posts p 
+      LEFT JOIN users u ON p.authorId = u.id 
+      ORDER BY p.createdAt DESC
+    `);
+  },
 
-  async getAllPosts(): Promise<PostWithAuthor[]> {
-    const result = await db
-      .select({
-        id: posts.id,
-        title: posts.title,
-        content: posts.content,
-        type: posts.type,
-        status: posts.status,
-        authorId: posts.authorId,
-        likes: posts.likes,
-        createdAt: posts.createdAt,
-        updatedAt: posts.updatedAt,
-        author: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        }
-      })
-      .from(posts)
-      .leftJoin(users, eq(posts.authorId, users.id))
-      .orderBy(desc(posts.createdAt));
+  async getPostsByType(type: string) {
+    return runQueryAll(`
+      SELECT p.*, u.firstName, u.lastName, u.username 
+      FROM posts p 
+      LEFT JOIN users u ON p.authorId = u.id 
+      WHERE p.type = ?
+      ORDER BY p.createdAt DESC
+    `, [type]);
+  },
 
-    // Get comments for each post
-    const postsWithComments = await Promise.all(
-      result.map(async (post) => {
-        const postComments = await db
-          .select({
-            id: comments.id,
-            content: comments.content,
-            postId: comments.postId,
-            authorId: comments.authorId,
-            createdAt: comments.createdAt,
-            author: {
-              id: users.id,
-              firstName: users.firstName,
-              lastName: users.lastName,
-              unitNumber: users.unitNumber,
-            }
-          })
-          .from(comments)
-          .leftJoin(users, eq(comments.authorId, users.id))
-          .where(eq(comments.postId, post.id))
-          .orderBy(desc(comments.createdAt));
+  async getPost(id: string) {
+    return runQuery(`
+      SELECT p.*, u.firstName, u.lastName, u.username 
+      FROM posts p 
+      LEFT JOIN users u ON p.authorId = u.id 
+      WHERE p.id = ?
+    `, [id]);
+  },
 
-        return {
-          ...post,
-          author: post.author || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null },
-          comments: postComments.map(comment => ({
-            ...comment,
-            author: comment.author || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null }
-          })),
-        };
-      })
+  async createPost(post: any) {
+    const id = `post-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const status = post.status || 'active';
+    await runQueryRun(
+      'INSERT INTO posts (id, title, content, type, authorId, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, post.title, post.content, post.type, post.authorId, status]
     );
+    return this.getPost(id);
+  },
 
-    return postsWithComments;
-  }
+  async updatePost(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    await runQueryRun(`UPDATE posts SET ${fields}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`, [...values, id]);
+    return this.getPost(id);
+  },
 
-  async getPostsByType(type: string): Promise<PostWithAuthor[]> {
-    const result = await db
-      .select({
-        id: posts.id,
-        title: posts.title,
-        content: posts.content,
-        type: posts.type,
-        status: posts.status,
-        authorId: posts.authorId,
-        likes: posts.likes,
-        createdAt: posts.createdAt,
-        updatedAt: posts.updatedAt,
-        author: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        }
-      })
-      .from(posts)
-      .leftJoin(users, eq(posts.authorId, users.id))
-      .where(eq(posts.type, type as any))
-      .orderBy(desc(posts.createdAt));
+  async updatePostStatus(id: string, status: string, adminComment?: string) {
+    if (adminComment) {
+      await runQueryRun('UPDATE posts SET status = ?, admin_comment = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [status, adminComment, id]);
+    } else {
+      await runQueryRun('UPDATE posts SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [status, id]);
+    }
+    return this.getPost(id);
+  },
 
-    const postsWithComments = await Promise.all(
-      result.map(async (post) => {
-        const postComments = await db
-          .select({
-            id: comments.id,
-            content: comments.content,
-            postId: comments.postId,
-            authorId: comments.authorId,
-            createdAt: comments.createdAt,
-            author: {
-              id: users.id,
-              firstName: users.firstName,
-              lastName: users.lastName,
-              unitNumber: users.unitNumber,
-            }
-          })
-          .from(comments)
-          .leftJoin(users, eq(comments.authorId, users.id))
-          .where(eq(comments.postId, post.id))
-          .orderBy(desc(comments.createdAt));
+  async likePost(postId: string, userId: string) {
+    // Check if already liked
+    const existingLike = await runQuery('SELECT * FROM post_likes WHERE postId = ? AND userId = ?', [postId, userId]);
+    if (existingLike) {
+      // Unlike
+      await runQueryRun('DELETE FROM post_likes WHERE postId = ? AND userId = ?', [postId, userId]);
+    } else {
+      // Like
+      const likeId = `like-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await runQueryRun('INSERT INTO post_likes (id, postId, userId) VALUES (?, ?, ?)', [likeId, postId, userId]);
+    }
+    return this.getPost(postId);
+  },
 
-        return {
-          ...post,
-          author: post.author || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null },
-          comments: postComments.map(comment => ({
-            ...comment,
-            author: comment.author || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null }
-          })),
-        };
-      })
-    );
-
-    return postsWithComments;
-  }
-
-  async updatePostStatus(postId: string, status: 'active' | 'resolved' | 'frozen'): Promise<Post> {
-    const [post] = await db
-      .update(posts)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(posts.id, postId))
-      .returning();
-    return post;
-  }
-
-  async likePost(postId: string): Promise<Post> {
-    const [post] = await db
-      .update(posts)
-      .set({ likes: sql`${posts.likes} + 1` })
-      .where(eq(posts.id, postId))
-      .returning();
-    return post;
-  }
+  async deletePost(id: string) {
+    await runQueryRun('DELETE FROM posts WHERE id = ?', [id]);
+  },
 
   // Comment operations
-  async createComment(comment: InsertComment): Promise<Comment> {
-    const [newComment] = await db.insert(comments).values(comment).returning();
-    return newComment;
-  }
+  async getComments(postId: string) {
+    const comments = await runQueryAll(`
+      SELECT c.*, u.firstName, u.lastName, u.username 
+      FROM comments c 
+      LEFT JOIN users u ON c.authorId = u.id 
+      WHERE c.postId = ? 
+      ORDER BY c.createdAt ASC
+    `, [postId]);
+    
+    // Transform the data to match the expected structure
+    return comments.map((comment: any) => ({
+      id: comment.id,
+      content: comment.content,
+      authorId: comment.authorId,
+      postId: comment.postId,
+      createdAt: comment.createdAt,
+      author: {
+        firstName: comment.firstName,
+        lastName: comment.lastName,
+        username: comment.username
+      }
+    }));
+  },
 
-  async getCommentsByPostId(postId: string): Promise<Comment[]> {
-    return await db.select().from(comments).where(eq(comments.postId, postId)).orderBy(desc(comments.createdAt));
-  }
+  async getComment(id: string) {
+    const comment = await runQuery(`
+      SELECT c.*, u.firstName, u.lastName, u.username 
+      FROM comments c 
+      LEFT JOIN users u ON c.authorId = u.id 
+      WHERE c.id = ?
+    `, [id]);
+    
+    if (!comment) return null;
+    
+    // Transform the data to match the expected structure
+    return {
+      id: comment.id,
+      content: comment.content,
+      authorId: comment.authorId,
+      postId: comment.postId,
+      createdAt: comment.createdAt,
+      author: {
+        firstName: comment.firstName,
+        lastName: comment.lastName,
+        username: comment.username
+      }
+    };
+  },
+
+  async createComment(comment: any) {
+    const id = `comment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      'INSERT INTO comments (id, content, postId, authorId) VALUES (?, ?, ?, ?)',
+      [id, comment.content, comment.postId, comment.authorId]
+    );
+    
+    const createdComment = await runQuery(`
+      SELECT c.*, u.firstName, u.lastName, u.username 
+      FROM comments c 
+      LEFT JOIN users u ON c.authorId = u.id 
+      WHERE c.id = ?
+    `, [id]);
+    
+    if (!createdComment) return null;
+    
+    // Transform the data to match the expected structure
+    return {
+      id: createdComment.id,
+      content: createdComment.content,
+      authorId: createdComment.authorId,
+      postId: createdComment.postId,
+      createdAt: createdComment.createdAt,
+      author: {
+        firstName: createdComment.firstName,
+        lastName: createdComment.lastName,
+        username: createdComment.username
+      }
+    };
+  },
+
+  async deleteComment(id: string) {
+    await runQueryRun('DELETE FROM comments WHERE id = ?', [id]);
+  },
 
   // Amenity operations
-  async getAllAmenities(): Promise<Amenity[]> {
-    return await db.select().from(amenities).where(eq(amenities.isActive, true));
-  }
+  async getAmenities() {
+    return runQueryAll('SELECT * FROM amenities ORDER BY name');
+  },
 
-  async getAmenityById(id: string): Promise<Amenity | undefined> {
-    const [amenity] = await db.select().from(amenities).where(eq(amenities.id, id));
-    return amenity;
-  }
+  async getAmenity(id: string) {
+    return runQuery('SELECT * FROM amenities WHERE id = ?', [id]);
+  },
+
+  async createAmenity(amenity: any) {
+    const id = `amenity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      'INSERT INTO amenities (id, name, description, type, capacity, isActive) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, amenity.name, amenity.description, amenity.type, amenity.capacity, amenity.isActive]
+    );
+    return this.getAmenity(id);
+  },
+
+  async updateAmenity(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    await runQueryRun(`UPDATE amenities SET ${fields} WHERE id = ?`, [...values, id]);
+    return this.getAmenity(id);
+  },
+
+  async deleteAmenity(id: string) {
+    await runQueryRun('DELETE FROM amenities WHERE id = ?', [id]);
+  },
 
   // Booking operations
-  async createBooking(booking: InsertBooking): Promise<Booking> {
-    const [newBooking] = await db.insert(bookings).values(booking).returning();
-    return newBooking;
-  }
+  async getBookings() {
+    return runQueryAll(`
+      SELECT b.*, 
+             u.firstName, u.lastName, u.username, u.unitNumber,
+             a.id as amenityId, a.name as amenityName, a.type as amenityType, 
+             a.description as amenityDescription
+      FROM bookings b 
+      LEFT JOIN users u ON b.userId = u.id 
+      LEFT JOIN amenities a ON b.amenityId = a.id 
+      ORDER BY b.bookingDate DESC, b.startTime ASC
+    `);
+  },
 
-  async getUserBookings(userId: string): Promise<BookingWithAmenity[]> {
-    const results = await db
-      .select({
-        id: bookings.id,
-        amenityId: bookings.amenityId,
-        userId: bookings.userId,
-        bookingDate: bookings.bookingDate,
-        startTime: bookings.startTime,
-        endTime: bookings.endTime,
-        status: bookings.status,
-        notes: bookings.notes,
-        createdAt: bookings.createdAt,
-        amenity: amenities,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        }
-      })
-      .from(bookings)
-      .leftJoin(amenities, eq(bookings.amenityId, amenities.id))
-      .leftJoin(users, eq(bookings.userId, users.id))
-      .where(eq(bookings.userId, userId))
-      .orderBy(desc(bookings.createdAt));
+  async getBooking(id: string) {
+    return runQuery(`
+      SELECT b.*, u.firstName, u.lastName, u.username, u.unitNumber, a.name as amenityName 
+      FROM bookings b 
+      LEFT JOIN users u ON b.userId = u.id 
+      LEFT JOIN amenities a ON b.amenityId = a.id 
+      WHERE b.id = ?
+    `, [id]);
+  },
+
+  async createBooking(booking: any) {
+    const id = `booking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      'INSERT INTO bookings (id, userId, amenityId, bookingDate, startTime, endTime, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, booking.userId, booking.amenityId, booking.bookingDate, booking.startTime, booking.endTime, booking.status]
+    );
+    return this.getBooking(id);
+  },
+
+  async updateBooking(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    await runQueryRun(`UPDATE bookings SET ${fields} WHERE id = ?`, [...values, id]);
+    return this.getBooking(id);
+  },
+
+  async deleteBooking(id: string) {
+    await runQueryRun('DELETE FROM bookings WHERE id = ?', [id]);
+  },
+
+  async getBookingsByUser(userId: string) {
+    return runQueryAll(`
+      SELECT b.*, 
+             a.id as amenityId, a.name as amenityName, a.type as amenityType, 
+             a.description as amenityDescription,
+             u.firstName, u.lastName, u.username, u.unitNumber
+      FROM bookings b 
+      LEFT JOIN amenities a ON b.amenityId = a.id 
+      LEFT JOIN users u ON b.userId = u.id
+      WHERE b.userId = ? 
+      ORDER BY b.bookingDate DESC, b.startTime ASC
+    `, [userId]);
+  },
+
+  async getUserBookings(userId: string) {
+    return runQueryAll(`
+      SELECT b.*, 
+             a.id as amenityId, a.name as amenityName, a.type as amenityType, 
+             a.description as amenityDescription,
+             u.firstName, u.lastName, u.username, u.unitNumber
+      FROM bookings b 
+      LEFT JOIN amenities a ON b.amenityId = a.id 
+      LEFT JOIN users u ON b.userId = u.id
+      WHERE b.userId = ? 
+      ORDER BY b.bookingDate DESC, b.startTime ASC
+    `, [userId]);
+  },
+
+  async getBookingsByAmenity(amenityId: string) {
+    return runQueryAll(`
+      SELECT b.*, u.firstName, u.lastName, u.username 
+      FROM bookings b 
+      LEFT JOIN users u ON b.userId = u.id 
+      WHERE b.amenityId = ? 
+      ORDER BY b.bookingDate DESC, b.startTime ASC
+    `, [amenityId]);
+  },
+
+  async getBookingsByAmenityAndDate(amenityId: string, date: string) {
+    return runQueryAll(`
+      SELECT b.*, u.firstName, u.lastName, u.username, u.unitNumber 
+      FROM bookings b 
+      LEFT JOIN users u ON b.userId = u.id 
+      WHERE b.amenityId = ? AND b.bookingDate = ? AND b.status IN ('confirmed', 'pending')
+      ORDER BY b.startTime ASC
+    `, [amenityId, date]);
+  },
+
+  async cancelBooking(bookingId: string) {
+    await runQueryRun(`UPDATE bookings SET status = 'cancelled' WHERE id = ?`, [bookingId]);
+    return this.getBooking(bookingId);
+  },
+
+  async rejectBooking(bookingId: string, reason?: string) {
+    await runQueryRun(`UPDATE bookings SET status = 'rejected' WHERE id = ?`, [bookingId]);
+    return this.getBooking(bookingId);
+  },
+
+  // Placeholder implementations for other operations
+  async getGuestNotifications() { return []; },
+  async getUserGuestNotifications(userId: string) { return []; },
+  async createGuestNotification(notification: any) { return notification; },
+  async updateGuestNotification(id: string, updates: any) { return updates; },
+  async deleteGuestNotification(id: string) {},
+
+  async getMessages() { return []; },
+  async createMessage(message: any) { return message; },
+  async deleteMessage(id: string) {},
+  async markMessageAsRead(messageId: string) { return { id: messageId, isRead: true }; },
+
+  async getAnnouncements() { return []; },
+  async getAnnouncementsForRole(role: string) { return []; },
+  async createAnnouncement(announcement: any) { return announcement; },
+  async updateAnnouncement(id: string, updates: any) { return updates; },
+  async deleteAnnouncement(id: string) {},
+
+  async getMaintenanceRequests() { return []; },
+  async createMaintenanceRequest(request: any) { return request; },
+  async updateMaintenanceRequest(id: string, updates: any) { return updates; },
+  async deleteMaintenanceRequest(id: string) {},
+
+  async getBiometricRequests() {
+    const rows = await runQueryAll(`
+      SELECT br.*, u.firstName, u.lastName, u.unitNumber, u.role as userRole,
+             a.firstName as approverFirstName, a.lastName as approverLastName
+      FROM biometric_requests br
+      LEFT JOIN users u ON br.userId = u.id
+      LEFT JOIN users a ON br.approvedBy = a.id
+      ORDER BY br.createdAt DESC
+    `);
     
-    return results.filter(result => result.amenity !== null) as BookingWithAmenity[];
-  }
-
-  async getBookingsByAmenityAndDate(amenityId: string, date: string): Promise<Booking[]> {
-    return await db
-      .select()
-      .from(bookings)
-      .where(and(
-        eq(bookings.amenityId, amenityId),
-        eq(bookings.bookingDate, date),
-        eq(bookings.status, 'confirmed')
-      ));
-  }
-
-  async cancelBooking(bookingId: string): Promise<Booking> {
-    const [booking] = await db
-      .update(bookings)
-      .set({ status: 'cancelled' })
-      .where(eq(bookings.id, bookingId))
-      .returning();
-    return booking;
-  }
-
-  // Guest notification operations
-  async createGuestNotification(notification: InsertGuestNotification): Promise<GuestNotification> {
-    const [newNotification] = await db.insert(guestNotifications).values(notification).returning();
-    return newNotification;
-  }
-
-  async getUserGuestNotifications(userId: string): Promise<GuestNotificationWithUser[]> {
-    const result = await db
-      .select({
-        id: guestNotifications.id,
-        userId: guestNotifications.userId,
-        guestName: guestNotifications.guestName,
-        guestPhone: guestNotifications.guestPhone,
-        purpose: guestNotifications.purpose,
-        arrivalTime: guestNotifications.arrivalTime,
-        departureTime: guestNotifications.departureTime,
-        parkingSlot: guestNotifications.parkingSlot,
-        isActive: guestNotifications.isActive,
-        watchmanApproved: guestNotifications.watchmanApproved,
-        watchmanNotes: guestNotifications.watchmanNotes,
-        createdAt: guestNotifications.createdAt,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-      })
-      .from(guestNotifications)
-      .leftJoin(users, eq(guestNotifications.userId, users.id))
-      .where(eq(guestNotifications.userId, userId))
-      .orderBy(desc(guestNotifications.createdAt));
-
-    return result.map(item => ({
-      ...item,
-      user: item.user || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null }
+    // Transform the data to match frontend expectations
+    return rows.map((row: any) => ({
+      ...row,
+      user: {
+        id: row.userId,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        unitNumber: row.unitNumber,
+        role: row.userRole
+      },
+      approvedByUser: row.approvedBy ? {
+        id: row.approvedBy,
+        firstName: row.approverFirstName,
+        lastName: row.approverLastName
+      } : null
     }));
-  }
+  },
 
-  async getAllActiveGuestNotifications(): Promise<GuestNotificationWithUser[]> {
-    const result = await db
-      .select({
-        id: guestNotifications.id,
-        userId: guestNotifications.userId,
-        guestName: guestNotifications.guestName,
-        guestPhone: guestNotifications.guestPhone,
-        purpose: guestNotifications.purpose,
-        arrivalTime: guestNotifications.arrivalTime,
-        departureTime: guestNotifications.departureTime,
-        parkingSlot: guestNotifications.parkingSlot,
-        isActive: guestNotifications.isActive,
-        watchmanApproved: guestNotifications.watchmanApproved,
-        watchmanNotes: guestNotifications.watchmanNotes,
-        createdAt: guestNotifications.createdAt,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-      })
-      .from(guestNotifications)
-      .leftJoin(users, eq(guestNotifications.userId, users.id))
-      .where(eq(guestNotifications.isActive, true))
-      .orderBy(desc(guestNotifications.createdAt));
-
-    return result.map(item => ({
-      ...item,
-      user: item.user || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null }
-    }));
-  }
-
-  async updateGuestNotification(notificationId: string, updates: Partial<GuestNotification>): Promise<GuestNotification> {
-    const [notification] = await db
-      .update(guestNotifications)
-      .set(updates)
-      .where(eq(guestNotifications.id, notificationId))
-      .returning();
-    return notification;
-  }
-
-  // Message operations
-  async createMessage(message: InsertMessage): Promise<Message> {
-    const [newMessage] = await db.insert(messages).values(message).returning();
-    return newMessage;
-  }
-
-  async getUserMessages(userId: string): Promise<MessageWithUsers[]> {
-    const result = await db
-      .select({
-        id: messages.id,
-        senderId: messages.senderId,
-        receiverId: messages.receiverId,
-        content: messages.content,
-        isRead: messages.isRead,
-        createdAt: messages.createdAt,
-        sender: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-          role: users.role,
-        },
-      })
-      .from(messages)
-      .leftJoin(users, eq(messages.senderId, users.id))
-      .where(eq(messages.receiverId, userId))
-      .orderBy(desc(messages.createdAt));
-
-    const messagesWithReceiver = await Promise.all(
-      result.map(async (msg) => {
-        const [receiver] = await db
-          .select({
-            id: users.id,
-            firstName: users.firstName,
-            lastName: users.lastName,
-            unitNumber: users.unitNumber,
-            role: users.role,
-          })
-          .from(users)
-          .where(eq(users.id, msg.receiverId));
-
-        return {
-          ...msg,
-          sender: msg.sender || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null, role: 'resident' as const },
-          receiver: receiver || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null, role: 'resident' as const },
-        };
-      })
-    );
-
-    return messagesWithReceiver;
-  }
-
-  async markMessageAsRead(messageId: string): Promise<Message> {
-    const [updatedMessage] = await db
-      .update(messages)
-      .set({ isRead: true })
-      .where(eq(messages.id, messageId))
-      .returning();
-    return updatedMessage;
-  }
-
-  // Announcement operations
-  async createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement> {
-    const [newAnnouncement] = await db.insert(announcements).values(announcement).returning();
-    return newAnnouncement;
-  }
-
-  async getAnnouncementsForRole(role: string): Promise<AnnouncementWithAuthor[]> {
-    const result = await db
-      .select({
-        id: announcements.id,
-        title: announcements.title,
-        content: announcements.content,
-        authorId: announcements.authorId,
-        targetRoles: announcements.targetRoles,
-        isUrgent: announcements.isUrgent,
-        expiresAt: announcements.expiresAt,
-        createdAt: announcements.createdAt,
-        author: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          role: users.role,
-        },
-      })
-      .from(announcements)
-      .leftJoin(users, eq(announcements.authorId, users.id))
-      .where(sql`${role} = ANY(${announcements.targetRoles})`)
-      .orderBy(desc(announcements.createdAt));
-
-    return result.map(item => ({
-      ...item,
-      author: item.author || { id: '', firstName: 'Unknown', lastName: 'User', role: 'admin' as const }
-    }));
-  }
-
-  async getAllAnnouncements(): Promise<AnnouncementWithAuthor[]> {
-    const result = await db
-      .select({
-        id: announcements.id,
-        title: announcements.title,
-        content: announcements.content,
-        authorId: announcements.authorId,
-        targetRoles: announcements.targetRoles,
-        isUrgent: announcements.isUrgent,
-        expiresAt: announcements.expiresAt,
-        createdAt: announcements.createdAt,
-        author: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          role: users.role,
-        },
-      })
-      .from(announcements)
-      .leftJoin(users, eq(announcements.authorId, users.id))
-      .orderBy(desc(announcements.createdAt));
-
-    return result.map(item => ({
-      ...item,
-      author: item.author || { id: '', firstName: 'Unknown', lastName: 'User', role: 'admin' as const }
-    }));
-  }
-
-  // Maintenance request operations
-  async createMaintenanceRequest(request: InsertMaintenanceRequest): Promise<MaintenanceRequest> {
-    const [newRequest] = await db.insert(maintenanceRequests).values(request).returning();
-    return newRequest;
-  }
-
-  async getUserMaintenanceRequests(userId: string): Promise<MaintenanceRequestWithUsers[]> {
-    const result = await db
-      .select({
-        id: maintenanceRequests.id,
-        userId: maintenanceRequests.userId,
-        title: maintenanceRequests.title,
-        description: maintenanceRequests.description,
-        category: maintenanceRequests.category,
-        priority: maintenanceRequests.priority,
-        status: maintenanceRequests.status,
-        assignedTo: maintenanceRequests.assignedTo,
-        unitNumber: maintenanceRequests.unitNumber,
-        preferredTime: maintenanceRequests.preferredTime,
-        createdAt: maintenanceRequests.createdAt,
-        updatedAt: maintenanceRequests.updatedAt,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-      })
-      .from(maintenanceRequests)
-      .leftJoin(users, eq(maintenanceRequests.userId, users.id))
-      .where(eq(maintenanceRequests.userId, userId))
-      .orderBy(desc(maintenanceRequests.createdAt));
-
-    const requestsWithAssignee = await Promise.all(
-      result.map(async (req) => {
-        let assignee = null;
-        if (req.assignedTo) {
-          const [assigneeUser] = await db
-            .select({
-              id: users.id,
-              firstName: users.firstName,
-              lastName: users.lastName,
-              role: users.role,
-            })
-            .from(users)
-            .where(eq(users.id, req.assignedTo));
-          assignee = assigneeUser;
-        }
-
-        return {
-          ...req,
-          user: req.user || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null },
-          assignee,
-        };
-      })
-    );
-
-    return requestsWithAssignee;
-  }
-
-  async getAllMaintenanceRequests(): Promise<MaintenanceRequestWithUsers[]> {
-    const result = await db
-      .select({
-        id: maintenanceRequests.id,
-        userId: maintenanceRequests.userId,
-        title: maintenanceRequests.title,
-        description: maintenanceRequests.description,
-        category: maintenanceRequests.category,
-        priority: maintenanceRequests.priority,
-        status: maintenanceRequests.status,
-        assignedTo: maintenanceRequests.assignedTo,
-        unitNumber: maintenanceRequests.unitNumber,
-        preferredTime: maintenanceRequests.preferredTime,
-        createdAt: maintenanceRequests.createdAt,
-        updatedAt: maintenanceRequests.updatedAt,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-      })
-      .from(maintenanceRequests)
-      .leftJoin(users, eq(maintenanceRequests.userId, users.id))
-      .orderBy(desc(maintenanceRequests.createdAt));
-
-    const requestsWithAssignee = await Promise.all(
-      result.map(async (req) => {
-        let assignee = null;
-        if (req.assignedTo) {
-          const [assigneeUser] = await db
-            .select({
-              id: users.id,
-              firstName: users.firstName,
-              lastName: users.lastName,
-              role: users.role,
-            })
-            .from(users)
-            .where(eq(users.id, req.assignedTo));
-          assignee = assigneeUser;
-        }
-
-        return {
-          ...req,
-          user: req.user || { id: '', firstName: 'Unknown', lastName: 'User', unitNumber: null },
-          assignee,
-        };
-      })
-    );
-
-    return requestsWithAssignee;
-  }
-
-  async updateMaintenanceRequestStatus(requestId: string, status: string, assignedTo?: string): Promise<MaintenanceRequest> {
-    const updateData: any = { status, updatedAt: new Date() };
-    if (assignedTo) {
-      updateData.assignedTo = assignedTo;
-    }
+  async getBiometricRequestsByUserId(userId: string) {
+    const rows = await runQueryAll(`
+      SELECT br.*, u.firstName, u.lastName, u.unitNumber, u.role as userRole,
+             a.firstName as approverFirstName, a.lastName as approverLastName
+      FROM biometric_requests br
+      LEFT JOIN users u ON br.userId = u.id
+      LEFT JOIN users a ON br.approvedBy = a.id
+      WHERE br.userId = ?
+      ORDER BY br.createdAt DESC
+    `, [userId]);
     
-    const [updatedRequest] = await db
-      .update(maintenanceRequests)
-      .set(updateData)
-      .where(eq(maintenanceRequests.id, requestId))
-      .returning();
-    return updatedRequest;
-  }
-
-  // Removed duplicate user management methods (already defined above)
-
-  // Biometric request operations
-  async getBiometricRequests(): Promise<BiometricRequestWithUser[]> {
-    const requests = await db.select({
-      id: biometricRequests.id,
-      userId: biometricRequests.userId,
-      requestType: biometricRequests.requestType,
-      reason: biometricRequests.reason,
-      accessLevel: biometricRequests.accessLevel,
-      status: biometricRequests.status,
-      approvedBy: biometricRequests.approvedBy,
-      adminNotes: biometricRequests.adminNotes,
-      requestDate: biometricRequests.requestDate,
-      approvedDate: biometricRequests.approvedDate,
-      expiryDate: biometricRequests.expiryDate,
-      createdAt: biometricRequests.createdAt,
-      updatedAt: biometricRequests.updatedAt,
+    // Transform the data to match frontend expectations
+    return rows.map((row: any) => ({
+      ...row,
       user: {
-        id: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        unitNumber: users.unitNumber,
-        role: users.role,
+        id: row.userId,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        unitNumber: row.unitNumber,
+        role: row.userRole
       },
-    })
-    .from(biometricRequests)
-    .leftJoin(users, eq(biometricRequests.userId, users.id))
-    .orderBy(desc(biometricRequests.createdAt));
+      approvedByUser: row.approvedBy ? {
+        id: row.approvedBy,
+        firstName: row.approverFirstName,
+        lastName: row.approverLastName
+      } : null
+    }));
+  },
 
-    return requests as BiometricRequestWithUser[];
-  }
+  async createBiometricRequest(request: any) {
+    const id = `biometric-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      'INSERT INTO biometric_requests (id, userId, requestType, reason, accessLevel, status) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, request.userId, request.requestType, request.reason, request.accessLevel, 'pending']
+    );
+    return this.getBiometricRequestsByUserId(request.userId);
+  },
 
-  async getBiometricRequestsByUserId(userId: string): Promise<BiometricRequestWithUser[]> {
-    const requests = await db.select({
-      id: biometricRequests.id,
-      userId: biometricRequests.userId,
-      requestType: biometricRequests.requestType,
-      reason: biometricRequests.reason,
-      accessLevel: biometricRequests.accessLevel,
-      status: biometricRequests.status,
-      approvedBy: biometricRequests.approvedBy,
-      adminNotes: biometricRequests.adminNotes,
-      requestDate: biometricRequests.requestDate,
-      approvedDate: biometricRequests.approvedDate,
-      expiryDate: biometricRequests.expiryDate,
-      createdAt: biometricRequests.createdAt,
-      updatedAt: biometricRequests.updatedAt,
-      user: {
-        id: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        unitNumber: users.unitNumber,
-        role: users.role,
-      },
-    })
-    .from(biometricRequests)
-    .leftJoin(users, eq(biometricRequests.userId, users.id))
-    .where(eq(biometricRequests.userId, userId))
-    .orderBy(desc(biometricRequests.createdAt));
-
-    return requests as BiometricRequestWithUser[];
-  }
-
-  async createBiometricRequest(request: InsertBiometricRequest): Promise<BiometricRequest> {
-    const [newRequest] = await db
-      .insert(biometricRequests)
-      .values(request)
-      .returning();
-    return newRequest;
-  }
-
-  async updateBiometricRequest(id: string, updates: Partial<BiometricRequest>): Promise<BiometricRequest | undefined> {
-    const [updated] = await db
-      .update(biometricRequests)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(biometricRequests.id, id))
-      .returning();
-    return updated;
-  }
-
-  // Tenant document operations
-  async getTenantDocuments(): Promise<TenantDocumentWithUser[]> {
-    const documents = await db.select({
-      id: tenantDocuments.id,
-      userId: tenantDocuments.userId,
-      documentType: tenantDocuments.documentType,
-      documentName: tenantDocuments.documentName,
-      filePath: tenantDocuments.filePath,
-      fileSize: tenantDocuments.fileSize,
-      mimeType: tenantDocuments.mimeType,
-      status: tenantDocuments.status,
-      reviewedBy: tenantDocuments.reviewedBy,
-      adminNotes: tenantDocuments.adminNotes,
-      uploadDate: tenantDocuments.uploadDate,
-      reviewDate: tenantDocuments.reviewDate,
-      expiryDate: tenantDocuments.expiryDate,
-      createdAt: tenantDocuments.createdAt,
-      updatedAt: tenantDocuments.updatedAt,
-      user: {
-        id: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        unitNumber: users.unitNumber,
-      },
-    })
-    .from(tenantDocuments)
-    .leftJoin(users, eq(tenantDocuments.userId, users.id))
-    .orderBy(desc(tenantDocuments.createdAt));
-
-    return documents as TenantDocumentWithUser[];
-  }
-
-  async getTenantDocumentsByUserId(userId: string): Promise<TenantDocumentWithUser[]> {
-    const documents = await db.select({
-      id: tenantDocuments.id,
-      userId: tenantDocuments.userId,
-      documentType: tenantDocuments.documentType,
-      documentName: tenantDocuments.documentName,
-      filePath: tenantDocuments.filePath,
-      fileSize: tenantDocuments.fileSize,
-      mimeType: tenantDocuments.mimeType,
-      status: tenantDocuments.status,
-      reviewedBy: tenantDocuments.reviewedBy,
-      adminNotes: tenantDocuments.adminNotes,
-      uploadDate: tenantDocuments.uploadDate,
-      reviewDate: tenantDocuments.reviewDate,
-      expiryDate: tenantDocuments.expiryDate,
-      createdAt: tenantDocuments.createdAt,
-      updatedAt: tenantDocuments.updatedAt,
-      user: {
-        id: users.id,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        unitNumber: users.unitNumber,
-      },
-    })
-    .from(tenantDocuments)
-    .leftJoin(users, eq(tenantDocuments.userId, users.id))
-    .where(eq(tenantDocuments.userId, userId))
-    .orderBy(desc(tenantDocuments.createdAt));
-
-    return documents as TenantDocumentWithUser[];
-  }
-
-  async createTenantDocument(document: InsertTenantDocument): Promise<TenantDocument> {
-    const [newDocument] = await db
-      .insert(tenantDocuments)
-      .values(document)
-      .returning();
-    return newDocument;
-  }
-
-  async updateTenantDocument(id: string, updates: Partial<TenantDocument>): Promise<TenantDocument | undefined> {
-    const [updated] = await db
-      .update(tenantDocuments)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(tenantDocuments.id, id))
-      .returning();
-    return updated;
-  }
-
-  // Booking report operations
-  async getBookingReport(): Promise<BookingReport> {
-    // Get total bookings count
-    const totalBookingsResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(bookings);
-    const totalBookings = totalBookingsResult[0]?.count || 0;
-
-    // Get bookings by status
-    const activeBookingsResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(bookings)
-      .where(eq(bookings.status, 'confirmed'));
-    const activeBookings = activeBookingsResult[0]?.count || 0;
-
-    const cancelledBookingsResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(bookings)
-      .where(eq(bookings.status, 'cancelled'));
-    const cancelledBookings = cancelledBookingsResult[0]?.count || 0;
-
-    const completedBookingsResult = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(bookings)
-      .where(eq(bookings.status, 'completed'));
-    const completedBookings = completedBookingsResult[0]?.count || 0;
-
-    // Get popular amenities
-    const popularAmenitiesResult = await db
-      .select({
-        amenityName: amenities.name,
-        bookingCount: sql<number>`count(${bookings.id})`,
-      })
-      .from(bookings)
-      .leftJoin(amenities, eq(bookings.amenityId, amenities.id))
-      .groupBy(amenities.name)
-      .orderBy(desc(sql`count(${bookings.id})`))
-      .limit(5);
-
-    // Get bookings by month (last 12 months)
-    const bookingsByMonthResult = await db
-      .select({
-        month: sql<string>`TO_CHAR(${bookings.createdAt}, 'YYYY-MM')`,
-        count: sql<number>`count(*)`,
-      })
-      .from(bookings)
-      .where(gte(bookings.createdAt, sql`NOW() - INTERVAL '12 months'`))
-      .groupBy(sql`TO_CHAR(${bookings.createdAt}, 'YYYY-MM')`)
-      .orderBy(sql`TO_CHAR(${bookings.createdAt}, 'YYYY-MM')`);
-
-    // Get recent bookings (last 10)
-    const recentBookingsResult = await db
-      .select({
-        id: bookings.id,
-        amenityId: bookings.amenityId,
-        userId: bookings.userId,
-        bookingDate: bookings.bookingDate,
-        startTime: bookings.startTime,
-        endTime: bookings.endTime,
-        status: bookings.status,
-        notes: bookings.notes,
-        createdAt: bookings.createdAt,
-        amenity: amenities,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        }
-      })
-      .from(bookings)
-      .leftJoin(amenities, eq(bookings.amenityId, amenities.id))
-      .leftJoin(users, eq(bookings.userId, users.id))
-      .orderBy(desc(bookings.createdAt))
-      .limit(10);
-
-    const recentBookings = recentBookingsResult.filter(result => result.amenity !== null) as BookingWithAmenity[];
-
+  async updateBiometricRequest(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    values.push(id);
+    
+    await runQueryRun(
+      `UPDATE biometric_requests SET ${fields}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+      values
+    );
+    
+    // Return the updated request
+    const row = await runQuery(`
+      SELECT br.*, u.firstName, u.lastName, u.unitNumber, u.role as userRole,
+             a.firstName as approverFirstName, a.lastName as approverLastName
+      FROM biometric_requests br
+      LEFT JOIN users u ON br.userId = u.id
+      LEFT JOIN users a ON br.approvedBy = a.id
+      WHERE br.id = ?
+    `, [id]);
+    
+    if (!row) return null;
+    
+    // Transform the data to match frontend expectations
     return {
-      totalBookings,
-      activeBookings,
-      cancelledBookings,
-      completedBookings,
-      popularAmenities: popularAmenitiesResult.map(item => ({
-        amenityName: item.amenityName || 'Unknown',
-        bookingCount: item.bookingCount,
-      })),
-      bookingsByMonth: bookingsByMonthResult.map(item => ({
-        month: item.month,
-        count: item.count,
-      })),
-      recentBookings,
+      ...row,
+      user: {
+        id: row.userId,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        unitNumber: row.unitNumber,
+        role: row.userRole
+      },
+      approvedByUser: row.approvedBy ? {
+        id: row.approvedBy,
+        firstName: row.approverFirstName,
+        lastName: row.approverLastName
+      } : null
     };
-  }
+  },
 
-  // Financial Management operations implementation
-  
-  // Fee Types
-  async createFeeType(feeType: InsertFeeType): Promise<FeeType> {
-    const [created] = await db.insert(feeTypes).values(feeType).returning();
-    return created;
-  }
+  async deleteBiometricRequest(id: string) {
+    await runQueryRun('DELETE FROM biometric_requests WHERE id = ?', [id]);
+  },
 
-  async getAllFeeTypes(): Promise<FeeType[]> {
-    return await db.select().from(feeTypes).orderBy(feeTypes.name);
-  }
+  async enableBiometricAccess(userId: string, requestType: string, accessLevel: string) {
+    // Create an approved biometric request
+    const id = `biometric-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const reason = `Admin enabled biometric access for user ${userId}`;
+    
+    await runQueryRun(
+      `INSERT INTO biometric_requests (
+        id, userId, requestType, reason, accessLevel, status, 
+        approvedBy, approvedDate, expiryDate
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id, userId, requestType, reason, accessLevel, 'approved',
+        'admin-001', new Date().toISOString(),
+        new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() // 1 year expiry
+      ]
+    );
+    
+    return this.getUserBiometricStatus(userId);
+  },
 
-  async updateFeeType(id: string, updates: Partial<InsertFeeType>): Promise<FeeType> {
-    const [updated] = await db
-      .update(feeTypes)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(feeTypes.id, id))
-      .returning();
-    return updated;
-  }
+  async disableBiometricAccess(userId: string) {
+    // Update all biometric requests for this user to rejected
+    await runQueryRun(
+      `UPDATE biometric_requests 
+       SET status = 'rejected', 
+           adminNotes = 'Access disabled by admin',
+           updatedAt = CURRENT_TIMESTAMP 
+       WHERE userId = ? AND status = 'approved'`,
+      [userId]
+    );
+    
+    return this.getUserBiometricStatus(userId);
+  },
 
-  async deleteFeeType(id: string): Promise<void> {
-    await db.delete(feeTypes).where(eq(feeTypes.id, id));
-  }
-
-  // Fee Schedules
-  async createFeeSchedule(schedule: InsertFeeSchedule): Promise<FeeSchedule> {
-    const [created] = await db.insert(feeSchedules).values(schedule).returning();
-    return created;
-  }
-
-  async getAllFeeSchedules(): Promise<FeeSchedule[]> {
-    return await db.select().from(feeSchedules).orderBy(feeSchedules.name);
-  }
-
-  async getFeeSchedulesByType(feeTypeId: string): Promise<FeeSchedule[]> {
-    return await db
-      .select()
-      .from(feeSchedules)
-      .where(eq(feeSchedules.feeTypeId, feeTypeId));
-  }
-
-  async updateFeeSchedule(id: string, updates: Partial<InsertFeeSchedule>): Promise<FeeSchedule> {
-    const [updated] = await db
-      .update(feeSchedules)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(feeSchedules.id, id))
-      .returning();
-    return updated;
-  }
-
-  async deleteFeeSchedule(id: string): Promise<void> {
-    await db.delete(feeSchedules).where(eq(feeSchedules.id, id));
-  }
-
-  // Fee Transactions
-  async createFeeTransaction(transaction: InsertFeeTransaction): Promise<FeeTransaction> {
-    const [created] = await db.insert(feeTransactions).values(transaction).returning();
-    return created;
-  }
-
-  async getFeeTransactionsByUser(userId: string): Promise<FeeTransactionWithDetails[]> {
-    const results = await db
-      .select({
-        transaction: feeTransactions,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-        feeType: feeTypes,
-        feeSchedule: feeSchedules,
-      })
-      .from(feeTransactions)
-      .leftJoin(users, eq(feeTransactions.userId, users.id))
-      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
-      .leftJoin(feeSchedules, eq(feeTransactions.feeScheduleId, feeSchedules.id))
-      .where(eq(feeTransactions.userId, userId))
-      .orderBy(desc(feeTransactions.createdAt));
-
-    // For each transaction, get payments and calculate totals
-    const transactionsWithDetails: FeeTransactionWithDetails[] = [];
-    for (const result of results) {
-      const transactionPayments = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.feeTransactionId, result.transaction.id));
-
-      const totalPaid = transactionPayments.reduce((sum, payment) => 
-        sum + parseFloat(payment.amount), 0
-      ).toFixed(2);
-
-      const remainingAmount = (
-        parseFloat(result.transaction.totalAmount) - parseFloat(totalPaid)
-      ).toFixed(2);
-
-      transactionsWithDetails.push({
-        ...result.transaction,
-        user: result.user!,
-        feeType: result.feeType!,
-        feeSchedule: result.feeSchedule,
-        payments: transactionPayments,
-        totalPaid,
-        remainingAmount,
-      });
-    }
-
-    return transactionsWithDetails;
-  }
-
-  async getAllFeeTransactions(): Promise<FeeTransactionWithDetails[]> {
-    const results = await db
-      .select({
-        transaction: feeTransactions,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-        feeType: feeTypes,
-        feeSchedule: feeSchedules,
-      })
-      .from(feeTransactions)
-      .leftJoin(users, eq(feeTransactions.userId, users.id))
-      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
-      .leftJoin(feeSchedules, eq(feeTransactions.feeScheduleId, feeSchedules.id))
-      .orderBy(desc(feeTransactions.createdAt));
-
-    // For each transaction, get payments and calculate totals
-    const transactionsWithDetails: FeeTransactionWithDetails[] = [];
-    for (const result of results) {
-      const transactionPayments = await db
-        .select()
-        .from(payments)
-        .where(eq(payments.feeTransactionId, result.transaction.id));
-
-      const totalPaid = transactionPayments.reduce((sum, payment) => 
-        sum + parseFloat(payment.amount), 0
-      ).toFixed(2);
-
-      const remainingAmount = (
-        parseFloat(result.transaction.totalAmount) - parseFloat(totalPaid)
-      ).toFixed(2);
-
-      transactionsWithDetails.push({
-        ...result.transaction,
-        user: result.user!,
-        feeType: result.feeType!,
-        feeSchedule: result.feeSchedule,
-        payments: transactionPayments,
-        totalPaid,
-        remainingAmount,
-      });
-    }
-
-    return transactionsWithDetails;
-  }
-
-  async getFeeTransactionById(id: string): Promise<FeeTransactionWithDetails | undefined> {
-    const [result] = await db
-      .select({
-        transaction: feeTransactions,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-        feeType: feeTypes,
-        feeSchedule: feeSchedules,
-      })
-      .from(feeTransactions)
-      .leftJoin(users, eq(feeTransactions.userId, users.id))
-      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
-      .leftJoin(feeSchedules, eq(feeTransactions.feeScheduleId, feeSchedules.id))
-      .where(eq(feeTransactions.id, id));
-
-    if (!result) return undefined;
-
-    const transactionPayments = await db
-      .select()
-      .from(payments)
-      .where(eq(payments.feeTransactionId, result.transaction.id));
-
-    const totalPaid = transactionPayments.reduce((sum, payment) => 
-      sum + parseFloat(payment.amount), 0
-    ).toFixed(2);
-
-    const remainingAmount = (
-      parseFloat(result.transaction.totalAmount) - parseFloat(totalPaid)
-    ).toFixed(2);
-
+  async getUserBiometricStatus(userId: string) {
+    const row = await runQuery(`
+      SELECT br.*, u.firstName, u.lastName, u.unitNumber, u.role as userRole
+      FROM biometric_requests br
+      LEFT JOIN users u ON br.userId = u.id
+      WHERE br.userId = ? AND br.status = 'approved'
+      ORDER BY br.createdAt DESC
+      LIMIT 1
+    `, [userId]);
+    
+    if (!row) return null;
+    
+    // Transform the data to match frontend expectations
     return {
-      ...result.transaction,
-      user: result.user!,
-      feeType: result.feeType!,
-      feeSchedule: result.feeSchedule,
-      payments: transactionPayments,
-      totalPaid,
-      remainingAmount,
-    };
-  }
-
-  async updateFeeTransactionStatus(id: string, status: 'pending' | 'paid' | 'overdue' | 'cancelled'): Promise<FeeTransaction> {
-    const [updated] = await db
-      .update(feeTransactions)
-      .set({ status, updatedAt: new Date() })
-      .where(eq(feeTransactions.id, id))
-      .returning();
-    return updated;
-  }
-
-  async generateMonthlyFees(month: string, year: string): Promise<FeeTransaction[]> {
-    // Get active fee schedules
-    const activeSchedules = await db
-      .select()
-      .from(feeSchedules)
-      .where(eq(feeSchedules.isActive, true));
-
-    // Get all active residents
-    const activeUsers = await db
-      .select()
-      .from(users)
-      .where(eq(users.status, 'active'));
-
-    const createdTransactions: FeeTransaction[] = [];
-    const dueDate = new Date(`${year}-${month}-01`);
-
-    for (const schedule of activeSchedules) {
-      for (const user of activeUsers) {
-        // Check if this user's unit matches the applicable units
-        if (schedule.applicableUnits && schedule.applicableUnits.length > 0) {
-          const userUnit = user.unitNumber;
-          if (!userUnit) continue;
-          
-          const matchesPattern = schedule.applicableUnits.some(pattern => {
-            if (pattern.endsWith('*')) {
-              const prefix = pattern.slice(0, -1);
-              return userUnit.startsWith(prefix);
-            }
-            return userUnit === pattern;
-          });
-          
-          if (!matchesPattern) continue;
-        }
-
-        // Check if transaction already exists for this month
-        const existingTransaction = await db
-          .select()
-          .from(feeTransactions)
-          .where(
-            and(
-              eq(feeTransactions.userId, user.id),
-              eq(feeTransactions.feeScheduleId, schedule.id),
-              sql`EXTRACT(MONTH FROM ${feeTransactions.dueDate}) = ${month}`,
-              sql`EXTRACT(YEAR FROM ${feeTransactions.dueDate}) = ${year}`
-            )
-          )
-          .limit(1);
-
-        if (existingTransaction.length > 0) continue;
-
-        // Create new fee transaction
-        const transaction: InsertFeeTransaction = {
-          userId: user.id,
-          feeScheduleId: schedule.id,
-          feeTypeId: schedule.feeTypeId,
-          description: `${schedule.name} - ${month}/${year}`,
-          amount: schedule.amount,
-          dueDate: dueDate.toISOString().split('T')[0],
-          status: 'pending',
-          penaltyAmount: '0',
-          totalAmount: schedule.amount,
-          unitNumber: user.unitNumber,
-        };
-
-        const [created] = await db.insert(feeTransactions).values(transaction).returning();
-        createdTransactions.push(created);
+      ...row,
+      user: {
+        id: row.userId,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        unitNumber: row.unitNumber,
+        role: row.userRole
       }
-    }
+    };
+  },
 
-    return createdTransactions;
-  }
+  // Flat management operations
+  async getFlats() {
+    return runQueryAll(`
+      SELECT f.*, 
+             u.firstName as ownerFirstName, u.lastName as ownerLastName, u.email as ownerEmail,
+             COUNT(r.id) as residentCount
+      FROM flats f
+      LEFT JOIN users u ON f.ownerId = u.id
+      LEFT JOIN users r ON r.unitNumber = f.flatNumber
+      GROUP BY f.id
+      ORDER BY f.flatNumber
+    `);
+  },
 
-  // Payments
-  async createPayment(payment: InsertPayment): Promise<Payment> {
-    const [created] = await db.insert(payments).values(payment).returning();
+  async getFlat(id: string) {
+    return runQuery(`
+      SELECT f.*, 
+             u.firstName as ownerFirstName, u.lastName as ownerLastName, u.email as ownerEmail
+      FROM flats f
+      LEFT JOIN users u ON f.ownerId = u.id
+      WHERE f.id = ?
+    `, [id]);
+  },
+
+  async createFlat(flat: any) {
+    const id = `flat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(
+      `INSERT INTO flats (id, flatNumber, floorNumber, type, bedrooms, bathrooms, area, rentAmount, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, flat.flatNumber, flat.floorNumber, flat.type, flat.bedrooms, flat.bathrooms, flat.area, flat.rentAmount, 'available']
+    );
+    return this.getFlat(id);
+  },
+
+  async updateFlat(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    values.push(id);
     
-    // Update fee transaction status if fully paid
-    const transaction = await this.getFeeTransactionById(payment.feeTransactionId);
-    if (transaction) {
-      const totalPaid = parseFloat(transaction.totalPaid) + parseFloat(payment.amount);
-      const totalAmount = parseFloat(transaction.totalAmount);
+    await runQueryRun(
+      `UPDATE flats SET ${fields}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+      values
+    );
+    
+    return this.getFlat(id);
+  },
+
+  async deleteFlat(id: string) {
+    await runQueryRun('DELETE FROM flats WHERE id = ?', [id]);
+  },
+
+  async assignFlatToUser(flatId: string, userId: string, isOwner: boolean) {
+    const flat = await this.getFlat(flatId);
+    if (!flat) throw new Error('Flat not found');
+    
+    const user = await this.getUser(userId);
+    if (!user) throw new Error('User not found');
+    
+    if (isOwner) {
+      // Assign as owner
+      await runQueryRun(
+        'UPDATE flats SET ownerId = ?, isOccupied = true, status = ? WHERE id = ?',
+        [userId, 'occupied', flatId]
+      );
+    } else {
+      // Assign as tenant - update user's unit number
+      await runQueryRun(
+        'UPDATE users SET unitNumber = ? WHERE id = ?',
+        [flat.flatNumber, userId]
+      );
       
-      if (totalPaid >= totalAmount) {
-        await this.updateFeeTransactionStatus(payment.feeTransactionId, 'paid');
-      }
+      // Update flat status
+      await runQueryRun(
+        'UPDATE flats SET isOccupied = true, status = ? WHERE id = ?',
+        ['occupied', flatId]
+      );
     }
     
-    return created;
-  }
+    return this.getFlat(flatId);
+  },
 
-  async getPaymentsByUser(userId: string): Promise<PaymentWithDetails[]> {
-    const results = await db
-      .select({
-        payment: payments,
-        feeTransaction: feeTransactions,
-        feeType: feeTypes,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-        processedByUser: {
-          id: sql<string>`processed_by_user.id`,
-          firstName: sql<string>`processed_by_user.first_name`,
-          lastName: sql<string>`processed_by_user.last_name`,
-        },
-      })
-      .from(payments)
-      .leftJoin(feeTransactions, eq(payments.feeTransactionId, feeTransactions.id))
-      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
-      .leftJoin(users, eq(feeTransactions.userId, users.id))
-      .leftJoin(sql`users AS processed_by_user`, sql`payments.processed_by = processed_by_user.id`)
-      .where(eq(payments.userId, userId))
-      .orderBy(desc(payments.createdAt));
+  async unassignFlatFromUser(flatId: string) {
+    const flat = await this.getFlat(flatId);
+    if (!flat) throw new Error('Flat not found');
+    
+    // Remove owner assignment
+    await runQueryRun(
+      'UPDATE flats SET ownerId = NULL, isOccupied = false, status = ? WHERE id = ?',
+      ['available', flatId]
+    );
+    
+    // Remove tenant assignments (users with this unit number)
+    await runQueryRun(
+      'UPDATE users SET unitNumber = ? WHERE unitNumber = ?',
+      ['Unassigned', flat.flatNumber]
+    );
+    
+    return this.getFlat(flatId);
+  },
 
-    return results.map(result => ({
-      ...result.payment,
-      feeTransaction: {
-        ...result.feeTransaction!,
-        feeType: result.feeType!,
-        user: result.user!,
-      },
-      processedByUser: result.processedByUser?.id ? result.processedByUser : null,
-    }));
-  }
+  // Get unique unit numbers for dropdown
+  async getUniqueUnitNumbers() {
+    return runQueryAll(`
+      SELECT DISTINCT flatNumber as unitNumber
+      FROM flats 
+      WHERE flatNumber IS NOT NULL AND flatNumber != ''
+      ORDER BY flatNumber
+    `);
+  },
 
-  async getAllPayments(): Promise<PaymentWithDetails[]> {
-    const results = await db
-      .select({
-        payment: payments,
-        feeTransaction: feeTransactions,
-        feeType: feeTypes,
-        user: {
-          id: users.id,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          unitNumber: users.unitNumber,
-        },
-        processedByUser: {
-          id: sql<string>`processed_by_user.id`,
-          firstName: sql<string>`processed_by_user.first_name`,
-          lastName: sql<string>`processed_by_user.last_name`,
-        },
-      })
-      .from(payments)
-      .leftJoin(feeTransactions, eq(payments.feeTransactionId, feeTransactions.id))
-      .leftJoin(feeTypes, eq(feeTransactions.feeTypeId, feeTypes.id))
-      .leftJoin(users, eq(feeTransactions.userId, users.id))
-      .leftJoin(sql`users AS processed_by_user`, sql`payments.processed_by = processed_by_user.id`)
-      .orderBy(desc(payments.createdAt));
+  async getTenantDocuments() { return []; },
+  async createTenantDocument(document: any) { return document; },
+  async updateTenantDocument(id: string, updates: any) { return updates; },
+  async deleteTenantDocument(id: string) {},
 
-    return results.map(result => ({
-      ...result.payment,
-      feeTransaction: {
-        ...result.feeTransaction!,
-        feeType: result.feeType!,
-        user: result.user!,
-      },
-      processedByUser: result.processedByUser?.id ? result.processedByUser : null,
-    }));
-  }
+  async getFeeTypes() { return []; },
+  async createFeeType(feeType: any) { return feeType; },
+  async updateFeeType(id: string, updates: any) { return updates; },
+  async deleteFeeType(id: string) {},
 
-  async getPaymentsByTransaction(transactionId: string): Promise<Payment[]> {
-    return await db
-      .select()
-      .from(payments)
-      .where(eq(payments.feeTransactionId, transactionId))
-      .orderBy(desc(payments.createdAt));
-  }
+  async getFeeSchedules() { return []; },
+  async createFeeSchedule(schedule: any) { return schedule; },
+  async updateFeeSchedule(id: string, updates: any) { return updates; },
+  async deleteFeeSchedule(id: string) {},
 
-  // Financial Reports
-  async getFinancialSummary(): Promise<FinancialSummary> {
-    // Get pending transactions
-    const pendingResult = await db
-      .select({
-        count: sql<number>`count(*)`,
-        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
-      })
-      .from(feeTransactions)
-      .where(eq(feeTransactions.status, 'pending'));
+  async getFeeTransactions() { return []; },
+  async getFeeTransactionsByUser(userId: string) { return []; },
+  async createFeeTransaction(transaction: any) { return transaction; },
+  async updateFeeTransaction(id: string, updates: any) { return updates; },
+  async deleteFeeTransaction(id: string) {},
 
-    // Get paid transactions
-    const paidResult = await db
-      .select({
-        count: sql<number>`count(*)`,
-        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
-      })
-      .from(feeTransactions)
-      .where(eq(feeTransactions.status, 'paid'));
+  async getPayments() { return []; },
+  async getPaymentsByUser(userId: string) { return []; },
+  async createPayment(payment: any) { return payment; },
+  async updatePayment(id: string, updates: any) { return updates; },
+  async deletePayment(id: string) {},
 
-    // Get overdue transactions
-    const overdueResult = await db
-      .select({
-        count: sql<number>`count(*)`,
-        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
-      })
-      .from(feeTransactions)
-      .where(eq(feeTransactions.status, 'overdue'));
+  async getPaymentNotifications() { return []; },
+  async createPaymentNotification(notification: any) { return notification; },
+  async updatePaymentNotification(id: string, updates: any) { return updates; },
+  async deletePaymentNotification(id: string) {},
 
-    // Get this month's collection
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    const monthlyResult = await db
-      .select({
-        total: sql<string>`COALESCE(SUM(${payments.amount}), 0)`,
-      })
-      .from(payments)
-      .where(sql`DATE_TRUNC('month', ${payments.paymentDate}) = DATE_TRUNC('month', CURRENT_DATE)`);
+  async getPaymentSchedules() { return []; },
+  async createPaymentSchedule(schedule: any) { return schedule; },
+  async updatePaymentSchedule(id: string, updates: any) { return updates; },
+  async deletePaymentSchedule(id: string) {},
 
-    return {
-      totalPending: pendingResult[0]?.total || '0',
-      totalPaid: paidResult[0]?.total || '0',
-      totalOverdue: overdueResult[0]?.total || '0',
-      monthlyCollection: monthlyResult[0]?.total || '0',
-      pendingCount: pendingResult[0]?.count || 0,
-      paidCount: paidResult[0]?.count || 0,
-      overdueCount: overdueResult[0]?.count || 0,
-    };
-  }
+  async getDefaulterTracking() { return []; },
+  async createDefaulterTracking(tracking: any) { return tracking; },
+  async updateDefaulterTracking(id: string, updates: any) { return updates; },
+  async deleteDefaulterTracking(id: string) {},
 
-  async getMonthlyCollectionReport(month: string, year: string) {
-    // Get total due for the month
-    const totalDueResult = await db
-      .select({
-        total: sql<string>`COALESCE(SUM(${feeTransactions.totalAmount}), 0)`,
-      })
-      .from(feeTransactions)
-      .where(
-        and(
-          sql`EXTRACT(MONTH FROM ${feeTransactions.dueDate}) = ${month}`,
-          sql`EXTRACT(YEAR FROM ${feeTransactions.dueDate}) = ${year}`
-        )
-      );
+  async getVisitors() {
+    return runQueryAll(`
+      SELECT v.*, 
+             h.firstName as hostFirstName, h.lastName as hostLastName, h.unitNumber as hostUnitNumber,
+             w.firstName as watchmanFirstName, w.lastName as watchmanLastName,
+             vb.firstName as verifiedByFirstName, vb.lastName as verifiedByLastName
+      FROM visitors v
+      LEFT JOIN users h ON v.hostUserId = h.id
+      LEFT JOIN users w ON v.watchmanId = w.id
+      LEFT JOIN users vb ON v.verifiedBy = vb.id
+      ORDER BY v.createdAt DESC
+    `);
+  },
 
-    // Get total collected for the month
-    const totalCollectedResult = await db
-      .select({
-        total: sql<string>`COALESCE(SUM(${payments.amount}), 0)`,
-      })
-      .from(payments)
-      .leftJoin(feeTransactions, eq(payments.feeTransactionId, feeTransactions.id))
-      .where(
-        and(
-          sql`EXTRACT(MONTH FROM ${feeTransactions.dueDate}) = ${month}`,
-          sql`EXTRACT(YEAR FROM ${feeTransactions.dueDate}) = ${year}`
-        )
-      );
+  async getVisitorsByWatchman(watchmanId: string) {
+    return runQueryAll(`
+      SELECT v.*, 
+             h.firstName as hostFirstName, h.lastName as hostLastName, h.unitNumber as hostUnitNumber,
+             w.firstName as watchmanFirstName, w.lastName as watchmanLastName,
+             vb.firstName as verifiedByFirstName, vb.lastName as verifiedByLastName
+      FROM visitors v
+      LEFT JOIN users h ON v.hostUserId = h.id
+      LEFT JOIN users w ON v.watchmanId = w.id
+      LEFT JOIN users vb ON v.verifiedBy = vb.id
+      WHERE v.watchmanId = ?
+      ORDER BY v.createdAt DESC
+    `, [watchmanId]);
+  },
 
-    const totalDue = parseFloat(totalDueResult[0]?.total || '0');
-    const totalCollected = parseFloat(totalCollectedResult[0]?.total || '0');
-    const collectionPercentage = totalDue > 0 ? (totalCollected / totalDue) * 100 : 0;
-    const pendingAmount = totalDue - totalCollected;
+  async getVisitorsForHost(hostUserId: string) {
+    return runQueryAll(`
+      SELECT v.*, 
+             h.firstName as hostFirstName, h.lastName as hostLastName, h.unitNumber as hostUnitNumber,
+             w.firstName as watchmanFirstName, w.lastName as watchmanLastName,
+             vb.firstName as verifiedByFirstName, vb.lastName as verifiedByLastName
+      FROM visitors v
+      LEFT JOIN users h ON v.hostUserId = h.id
+      LEFT JOIN users w ON v.watchmanId = w.id
+      LEFT JOIN users vb ON v.verifiedBy = vb.id
+      WHERE v.hostUserId = ?
+      ORDER BY v.createdAt DESC
+    `, [hostUserId]);
+  },
 
-    return {
-      totalDue: totalDue.toFixed(2),
-      totalCollected: totalCollected.toFixed(2),
-      collectionPercentage: Math.round(collectionPercentage * 100) / 100,
-      pendingAmount: pendingAmount.toFixed(2),
-    };
-  }
-}
+  async getGuestParkingBookings() {
+    return runQueryAll(`
+      SELECT b.*, 
+             u.firstName, u.lastName, u.unitNumber,
+             a.name as amenityName, a.type as amenityType
+      FROM bookings b
+      LEFT JOIN users u ON b.userId = u.id
+      LEFT JOIN amenities a ON b.amenityId = a.id
+      WHERE a.type = 'guest_parking' AND b.status IN ('confirmed', 'pending')
+      ORDER BY b.createdAt DESC
+    `);
+  },
 
-export const storage = new DatabaseStorage();
+  async getGuestParkingBookingsByUser(userId: string) {
+    return runQueryAll(`
+      SELECT b.*, 
+             u.firstName, u.lastName, u.unitNumber,
+             a.name as amenityName, a.type as amenityType
+      FROM bookings b
+      LEFT JOIN users u ON b.userId = u.id
+      LEFT JOIN amenities a ON b.amenityId = a.id
+      WHERE a.type = 'guest_parking' AND b.userId = ? AND b.status IN ('confirmed', 'pending')
+      ORDER BY b.createdAt DESC
+    `, [userId]);
+  },
+
+  async getVisitorsByStatus(status: string) {
+    return runQueryAll(`
+      SELECT v.*, 
+             h.firstName as hostFirstName, h.lastName as hostLastName, h.unitNumber as hostUnitNumber,
+             w.firstName as watchmanFirstName, w.lastName as watchmanLastName,
+             vb.firstName as verifiedByFirstName, vb.lastName as verifiedByLastName
+      FROM visitors v
+      LEFT JOIN users h ON v.hostUserId = h.id
+      LEFT JOIN users w ON v.watchmanId = w.id
+      LEFT JOIN users vb ON v.verifiedBy = vb.id
+      WHERE v.status = ?
+      ORDER BY v.createdAt DESC
+    `, [status]);
+  },
+
+  async getVisitor(id: string) {
+    return runQuery(`
+      SELECT v.*, 
+             h.firstName as hostFirstName, h.lastName as hostLastName, h.unitNumber as hostUnitNumber,
+             w.firstName as watchmanFirstName, w.lastName as watchmanLastName,
+             vb.firstName as verifiedByFirstName, vb.lastName as verifiedByLastName
+      FROM visitors v
+      LEFT JOIN users h ON v.hostUserId = h.id
+      LEFT JOIN users w ON v.watchmanId = w.id
+      LEFT JOIN users vb ON v.verifiedBy = vb.id
+      WHERE v.id = ?
+    `, [id]);
+  },
+
+  async createVisitor(visitor: any) {
+    const id = `visitor-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(`
+      INSERT INTO visitors (
+        id, name, phone, email, purpose, purposeDetails, unitToVisit, hostUserId,
+        photoUrl, idProofType, idProofNumber, idProofPhotoUrl, status, expectedDuration,
+        watchmanId, emergencyContact, vehicleNumber, guestParkingSlot, accompanyingPersons,
+        arrivalTime, departureTime
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id, visitor.name, visitor.phone, visitor.email, visitor.purpose, visitor.purposeDetails,
+      visitor.unitToVisit, visitor.hostUserId, visitor.photoUrl, visitor.idProofType,
+      visitor.idProofNumber, visitor.idProofPhotoUrl, visitor.status || 'pending',
+      visitor.expectedDuration, visitor.watchmanId, visitor.emergencyContact,
+      visitor.vehicleNumber, visitor.guestParkingSlot, visitor.accompanyingPersons || 0,
+      visitor.arrivalTime, visitor.departureTime
+    ]);
+    return this.getVisitor(id);
+  },
+
+  async updateVisitor(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    await runQueryRun(`
+      UPDATE visitors SET ${fields}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?
+    `, [...values, id]);
+    return this.getVisitor(id);
+  },
+
+  async deleteVisitor(id: string) {
+    await runQueryRun('DELETE FROM visitors WHERE id = ?', [id]);
+  },
+
+  async getVisitorNotifications() { return []; },
+  async createVisitorNotification(notification: any) { return notification; },
+  async updateVisitorNotification(id: string, updates: any) { return updates; },
+  async deleteVisitorNotification(id: string) {},
+};

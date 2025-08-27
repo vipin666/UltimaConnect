@@ -28,7 +28,7 @@ export const sessions = pgTable(
 );
 
 // User roles enum
-export const userRoleEnum = pgEnum('user_role', ['resident', 'admin', 'super_admin', 'watchman']);
+export const userRoleEnum = pgEnum('user_role', ['resident', 'admin', 'super_admin', 'watchman', 'caretaker', 'secretary', 'president', 'treasurer', 'committee_member']);
 
 // User status enum
 export const userStatusEnum = pgEnum('user_status', ['active', 'pending', 'suspended']);
@@ -45,6 +45,7 @@ export const users = pgTable("users", {
   role: userRoleEnum("role").default('resident').notNull(),
   status: userStatusEnum("status").default('pending').notNull(),
   unitNumber: varchar("unit_number"),
+  phone: varchar("phone", { length: 20 }),
   isOwner: boolean("is_owner").default(true).notNull(),
   ownerId: varchar("owner_id"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -55,7 +56,7 @@ export const users = pgTable("users", {
 export const postTypeEnum = pgEnum('post_type', ['general', 'complaint', 'suggestion', 'event']);
 
 // Post status enum
-export const postStatusEnum = pgEnum('post_status', ['active', 'resolved', 'frozen']);
+export const postStatusEnum = pgEnum('post_status', ['active', 'resolved', 'rejected', 'frozen']);
 
 // Posts table
 export const posts = pgTable("posts", {
@@ -66,6 +67,7 @@ export const posts = pgTable("posts", {
   status: postStatusEnum("status").default('active').notNull(),
   authorId: varchar("author_id").notNull().references(() => users.id),
   likes: integer("likes").default(0).notNull(),
+  adminComment: text("admin_comment"), // Admin comment when resolving/rejecting
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -94,7 +96,7 @@ export const amenities = pgTable("amenities", {
 });
 
 // Booking status enum
-export const bookingStatusEnum = pgEnum('booking_status', ['confirmed', 'cancelled', 'completed']);
+export const bookingStatusEnum = pgEnum('booking_status', ['pending', 'confirmed', 'cancelled', 'completed']);
 
 // Bookings table
 export const bookings = pgTable("bookings", {
@@ -104,7 +106,7 @@ export const bookings = pgTable("bookings", {
   bookingDate: date("booking_date").notNull(),
   startTime: time("start_time").notNull(),
   endTime: time("end_time").notNull(),
-  status: bookingStatusEnum("status").default('confirmed').notNull(),
+  status: bookingStatusEnum("status").default('pending').notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -467,6 +469,12 @@ export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'paid', 'o
 // Payment method enum
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'bank_transfer', 'upi', 'cheque', 'card', 'online']);
 
+// Visitor verification status enum
+export const visitorStatusEnum = pgEnum('visitor_status', ['pending', 'approved', 'rejected', 'checked_in', 'checked_out']);
+
+// Visitor purpose enum
+export const visitorPurposeEnum = pgEnum('visitor_purpose', ['personal', 'business', 'delivery', 'service', 'emergency', 'other']);
+
 // Fee types table
 export const feeTypes = pgTable("fee_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -527,6 +535,50 @@ export const payments = pgTable("payments", {
   processedBy: varchar("processed_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Visitors table
+export const visitors = pgTable("visitors", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  phone: varchar("phone").notNull(),
+  email: varchar("email"),
+  purpose: visitorPurposeEnum("purpose").notNull(),
+  purposeDetails: text("purpose_details"),
+  unitToVisit: varchar("unit_to_visit").notNull(),
+  hostUserId: varchar("host_user_id").notNull().references(() => users.id),
+  photoUrl: varchar("photo_url"),
+  idProofType: varchar("id_proof_type"),
+  idProofNumber: varchar("id_proof_number"),
+  idProofPhotoUrl: varchar("id_proof_photo_url"),
+  status: visitorStatusEnum("status").default('pending').notNull(),
+  checkInTime: timestamp("check_in_time"),
+  checkOutTime: timestamp("check_out_time"),
+  expectedDuration: varchar("expected_duration"),
+  actualDuration: varchar("actual_duration"),
+  verificationNotes: text("verification_notes"),
+  watchmanId: varchar("watchman_id").notNull().references(() => users.id),
+  verifiedBy: varchar("verified_by").references(() => users.id),
+  verifiedAt: timestamp("verified_at"),
+  rejectionReason: text("rejection_reason"),
+  emergencyContact: varchar("emergency_contact"),
+  vehicleNumber: varchar("vehicle_number"),
+  guestParkingSlot: varchar("guest_parking_slot"),
+  accompanyingPersons: integer("accompanying_persons").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Visitor notifications table
+export const visitorNotifications = pgTable("visitor_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  visitorId: varchar("visitor_id").notNull().references(() => visitors.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  title: varchar("title").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").default(false).notNull(),
+  actionTaken: varchar("action_taken"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Password reset tokens relations
@@ -602,6 +654,82 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
   }),
 }));
 
+// Payment notifications table for tracking defaulters
+export const paymentNotifications = pgTable("payment_notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  feeTransactionId: varchar("fee_transaction_id").notNull().references(() => feeTransactions.id),
+  notificationType: varchar("notification_type").notNull(), // 'reminder', 'overdue', 'final_notice'
+  daysOverdue: integer("days_overdue").notNull(),
+  message: text("message").notNull(),
+  sentDate: timestamp("sent_date").defaultNow(),
+  isRead: boolean("is_read").default(false).notNull(),
+  nextReminderDate: timestamp("next_reminder_date"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Payment schedules for advance payments and partial payments tracking
+export const paymentSchedules = pgTable("payment_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  feeTransactionId: varchar("fee_transaction_id").notNull().references(() => feeTransactions.id),
+  scheduledAmount: numeric("scheduled_amount", { precision: 10, scale: 2 }).notNull(),
+  dueDate: date("due_date").notNull(),
+  status: varchar("status").default('pending').notNull(), // 'pending', 'paid', 'overdue'
+  paidAmount: numeric("paid_amount", { precision: 10, scale: 2 }).default('0'),
+  remainingAmount: numeric("remaining_amount", { precision: 10, scale: 2 }).notNull(),
+  isAdvancePayment: boolean("is_advance_payment").default(false).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Defaulter tracking table
+export const defaulterTracking = pgTable("defaulter_tracking", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  unitNumber: varchar("unit_number").notNull(),
+  totalOutstandingAmount: numeric("total_outstanding_amount", { precision: 10, scale: 2 }).notNull(),
+  oldestDueDate: date("oldest_due_date").notNull(),
+  daysInDefault: integer("days_in_default").notNull(),
+  lastNotificationDate: timestamp("last_notification_date"),
+  notificationCount: integer("notification_count").default(0).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Add relations for new tables
+export const paymentNotificationsRelations = relations(paymentNotifications, ({ one }) => ({
+  user: one(users, {
+    fields: [paymentNotifications.userId],
+    references: [users.id],
+  }),
+  feeTransaction: one(feeTransactions, {
+    fields: [paymentNotifications.feeTransactionId],
+    references: [feeTransactions.id],
+  }),
+}));
+
+export const paymentSchedulesRelations = relations(paymentSchedules, ({ one }) => ({
+  user: one(users, {
+    fields: [paymentSchedules.userId],
+    references: [users.id],
+  }),
+  feeTransaction: one(feeTransactions, {
+    fields: [paymentSchedules.feeTransactionId],
+    references: [feeTransactions.id],
+  }),
+}));
+
+export const defaulterTrackingRelations = relations(defaulterTracking, ({ one }) => ({
+  user: one(users, {
+    fields: [defaulterTracking.userId],
+    references: [users.id],
+  }),
+}));
+
 // Financial Management Types
 export type FeeType = typeof feeTypes.$inferSelect;
 export type InsertFeeType = typeof feeTypes.$inferInsert;
@@ -644,4 +772,83 @@ export type FinancialSummary = {
   pendingCount: number;
   paidCount: number;
   overdueCount: number;
+};
+
+// Visitor relations
+export const visitorsRelations = relations(visitors, ({ one, many }) => ({
+  host: one(users, {
+    fields: [visitors.hostUserId],
+    references: [users.id],
+  }),
+  watchman: one(users, {
+    fields: [visitors.watchmanId],
+    references: [users.id],
+  }),
+  verifiedByUser: one(users, {
+    fields: [visitors.verifiedBy],
+    references: [users.id],
+  }),
+  notifications: many(visitorNotifications),
+}));
+
+export const visitorNotificationsRelations = relations(visitorNotifications, ({ one }) => ({
+  visitor: one(visitors, {
+    fields: [visitorNotifications.visitorId],
+    references: [visitors.id],
+  }),
+  user: one(users, {
+    fields: [visitorNotifications.userId],
+    references: [users.id],
+  }),
+}));
+
+// Visitor Management Types
+export type Visitor = typeof visitors.$inferSelect;
+export type InsertVisitor = typeof visitors.$inferInsert;
+export type VisitorNotification = typeof visitorNotifications.$inferSelect;
+export type InsertVisitorNotification = typeof visitorNotifications.$inferInsert;
+
+// Visitor Management Insert Schemas
+export const insertVisitorSchema = createInsertSchema(visitors);
+export const insertVisitorNotificationSchema = createInsertSchema(visitorNotifications);
+
+// Visitor with relations
+export type VisitorWithDetails = Visitor & {
+  host: { id: string; firstName: string | null; lastName: string | null; unitNumber: string | null };
+  watchman: { id: string; firstName: string | null; lastName: string | null };
+  verifiedByUser?: { id: string; firstName: string | null; lastName: string | null } | null;
+  notifications?: VisitorNotification[];
+};
+
+// New table types
+export type PaymentNotification = typeof paymentNotifications.$inferSelect;
+export type InsertPaymentNotification = typeof paymentNotifications.$inferInsert;
+export type PaymentSchedule = typeof paymentSchedules.$inferSelect;
+export type InsertPaymentSchedule = typeof paymentSchedules.$inferInsert;
+export type DefaulterTracking = typeof defaulterTracking.$inferSelect;
+export type InsertDefaulterTracking = typeof defaulterTracking.$inferInsert;
+
+// Insert schemas for new tables
+export const insertPaymentNotificationSchema = createInsertSchema(paymentNotifications);
+export const insertPaymentScheduleSchema = createInsertSchema(paymentSchedules);
+export const insertDefaulterTrackingSchema = createInsertSchema(defaulterTracking);
+
+// Extended types for new functionality
+export type PaymentNotificationWithDetails = PaymentNotification & {
+  user: { id: string; firstName: string | null; lastName: string | null; unitNumber: string | null };
+  feeTransaction: FeeTransaction & {
+    feeType: FeeType;
+  };
+};
+
+export type DefaulterWithDetails = DefaulterTracking & {
+  user: { id: string; firstName: string | null; lastName: string | null; unitNumber: string | null };
+  outstandingTransactions: FeeTransactionWithDetails[];
+};
+
+export type PaymentScheduleWithDetails = PaymentSchedule & {
+  user: { id: string; firstName: string | null; lastName: string | null; unitNumber: string | null };
+  feeTransaction: FeeTransaction & {
+    feeType: FeeType;
+  };
 };

@@ -1,6 +1,8 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { serveUploads } from "./localStorage";
+import { initializeDatabase } from "./db";
 
 const app = express();
 app.use(express.json());
@@ -37,7 +39,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Initialize database
+  await initializeDatabase();
+  
   const server = await registerRoutes(app);
+  
+  // Serve uploaded files
+  serveUploads(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -57,15 +65,11 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
+  // Other ports are firewalled. Default to 3000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
+  const port = parseInt(process.env.PORT || '3001', 10);
+  server.listen(port, "localhost", () => {
     log(`serving on port ${port}`);
   });
 })();

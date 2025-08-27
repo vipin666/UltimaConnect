@@ -5,14 +5,19 @@ import { Building, Bell, User } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import { PostCard } from "../community/PostCard";
 import { PostModal } from "../community/PostModal";
+import { Comments } from "../community/Comments";
 import { BookingCard } from "../bookings/BookingCard";
 import { BookingModal } from "../bookings/BookingModal";
 import { WatchmanDashboard } from "../watchman/WatchmanDashboard";
 import { AdminDashboard } from "../admin/AdminDashboard";
+import { MobileAdminDashboard } from "../admin/MobileAdminDashboard";
 import { MessagingTab } from "../messaging/MessagingTab";
 import { BiometricAccessTab } from "../access/BiometricAccessTab";
 import { TenantDocumentsTab } from "../documents/TenantDocumentsTab";
 import { BookingReportsTab } from "../admin/BookingReportsTab";
+import { VisitorsTab } from "../visitors/VisitorsTab";
+import { BookingManagementModal } from "../bookings/BookingManagementModal";
+import { CommitteeMembers } from "../committee/CommitteeMembers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -20,7 +25,7 @@ import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3, DollarSign } from "lucide-react";
+import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3, DollarSign, Users, Wrench, Home, MessageSquare, Shield, UserCheck } from "lucide-react";
 import type { PostWithAuthor, Amenity, BookingWithAmenity } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -29,12 +34,12 @@ export function MobileLayout() {
   
   // Set default tab based on user role
   const getDefaultTab = () => {
-    if (!user) return 'community';
+    if (!user) return 'home';
     switch (user.role) {
-      case 'watchman': return 'watchman';
+      case 'watchman': return 'home';
       case 'admin':
-      case 'super_admin': return 'admin';
-      default: return 'community';
+      case 'super_admin': return 'home';
+      default: return 'home';
     }
   };
   
@@ -42,7 +47,10 @@ export function MobileLayout() {
   const [activeServiceTab, setActiveServiceTab] = useState<string>('overview');
   const [showPostModal, setShowPostModal] = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showBookingManagementModal, setShowBookingManagementModal] = useState(false);
   const [selectedAmenity, setSelectedAmenity] = useState<{ id: string; name: string; type: string } | null>(null);
+  const [showRecentPosts, setShowRecentPosts] = useState(true);
+  const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: posts, isLoading: postsLoading } = useQuery<PostWithAuthor[]>({
@@ -57,7 +65,25 @@ export function MobileLayout() {
 
   const { data: bookings, isLoading: bookingsLoading } = useQuery<BookingWithAmenity[]>({
     queryKey: ['/api/bookings'],
-    enabled: activeTab === 'bookings',
+    enabled: activeTab === 'bookings' || (user?.role === 'admin' || user?.role === 'super_admin'),
+  });
+
+  const { data: complaints, isLoading: complaintsLoading } = useQuery<any[]>({
+    queryKey: ['/api/posts', { type: 'complaint' }],
+    queryFn: async () => {
+      const response = await fetch('/api/posts?type=complaint');
+      return response.json();
+    },
+    enabled: user?.role === 'admin' || user?.role === 'super_admin',
+  });
+
+  const { data: biometricRequests, isLoading: biometricLoading } = useQuery<any[]>({
+    queryKey: ['/api/biometric-requests'],
+    queryFn: async () => {
+      const response = await fetch('/api/biometric-requests');
+      return response.json();
+    },
+    enabled: user?.role === 'admin' || user?.role === 'super_admin',
   });
 
   const likePostMutation = useMutation({
@@ -75,7 +101,7 @@ export function MobileLayout() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/login";
         }, 500);
         return;
       }
@@ -106,7 +132,7 @@ export function MobileLayout() {
           variant: "destructive",
         });
         setTimeout(() => {
-          window.location.href = "/api/login";
+          window.location.href = "/login";
         }, 500);
         return;
       }
@@ -123,11 +149,7 @@ export function MobileLayout() {
   };
 
   const handleComment = (postId: string) => {
-    // TODO: Implement comment functionality
-    toast({
-      title: "Coming Soon",
-      description: "Comment feature will be available soon",
-    });
+    setCommentPostId(postId);
   };
 
   const handleBookAmenity = (amenityId: string, amenityType: string) => {
@@ -137,6 +159,437 @@ export function MobileLayout() {
       setShowBookingModal(true);
     }
   };
+
+  const renderHomeTab = () => (
+    <div className="space-y-4 pb-20">
+      {/* Welcome Section */}
+      <div className="px-4 mb-6">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-6 text-white shadow-lg">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+              <Building className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Welcome to Ultima Skymax</h2>
+              <p className="text-blue-100">Your smart community hub</p>
+            </div>
+          </div>
+          <p className="text-blue-100 text-sm">
+            Hello {user?.firstName} {user?.lastName}! Welcome to your community dashboard.
+          </p>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 gap-4 px-4 mb-6">
+        <Button 
+          onClick={() => setActiveTab('community')}
+          className="bg-accent text-white p-4 rounded-xl shadow-md flex flex-col items-center justify-center gap-2 hover:bg-orange-600 transition-colors h-20"
+        >
+          <Plus className="w-6 h-6" />
+          <span className="text-sm font-medium">Community</span>
+        </Button>
+        <Button 
+          onClick={() => setActiveTab('bookings')}
+          variant="outline"
+          className="border-2 border-blue-500 text-blue-500 p-4 rounded-xl shadow-md flex flex-col items-center justify-center gap-2 hover:bg-blue-50 transition-colors h-20"
+        >
+          <Calendar className="w-6 h-6" />
+          <span className="text-sm font-medium">Bookings</span>
+        </Button>
+      </div>
+
+      {/* Role-specific Quick Actions */}
+      {(user?.role === 'admin' || user?.role === 'super_admin') && (
+        <div className="px-4 mb-6">
+          <h3 className="text-lg font-medium text-gray-800 mb-3">Admin Quick Actions</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              onClick={() => setActiveTab('admin')}
+              className="bg-green-600 text-white p-3 rounded-lg flex flex-col items-center justify-center gap-1 hover:bg-green-700 transition-colors"
+            >
+              <Users className="w-5 h-5" />
+              <span className="text-xs">Admin Panel</span>
+            </Button>
+            <Button 
+              onClick={() => window.location.href = '/financial'}
+              className="bg-blue-600 text-white p-3 rounded-lg flex flex-col items-center justify-center gap-1 hover:bg-blue-700 transition-colors"
+            >
+              <DollarSign className="w-5 h-5" />
+              <span className="text-xs">Financial</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Priority Actions for Admin Users */}
+      {(user?.role === 'admin' || user?.role === 'super_admin') && (
+        <div className="px-4 mb-6">
+          {(Array.isArray(bookings) && bookings.filter(book => book.status === 'pending').length > 0) || 
+           (Array.isArray(complaints) && complaints.filter(complaint => complaint.status === 'active').length > 0) || 
+           (Array.isArray(biometricRequests) && biometricRequests.filter(req => req.status === 'pending').length > 0) ? (
+            <Card className="shadow-md border-2 border-orange-200 bg-orange-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium text-orange-800 flex items-center space-x-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    <span>Priority Actions Required</span>
+                    <Badge className="bg-orange-200 text-orange-800">
+                      {((Array.isArray(bookings) ? bookings.filter(book => book.status === 'pending').length : 0) + 
+                        (Array.isArray(complaints) ? complaints.filter(complaint => complaint.status === 'active').length : 0) + 
+                        (Array.isArray(biometricRequests) ? biometricRequests.filter(req => req.status === 'pending').length : 0))} New Requests
+                    </Badge>
+                  </h3>
+                </div>
+                <div className="space-y-3">
+                  {/* Pending Bookings */}
+                  {Array.isArray(bookings) && bookings.filter(book => book.status === 'pending').length > 0 && (
+                    <div className="p-3 bg-white border border-orange-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-800 flex items-center space-x-2">
+                            <Calendar className="w-4 h-4 text-orange-600" />
+                            <span>Pending Bookings ({bookings.filter(book => book.status === 'pending').length})</span>
+                          </h4>
+                          <p className="text-sm text-gray-600">Require approval</p>
+                        </div>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            setActiveTab('admin');
+                            sessionStorage.setItem('adminTargetTab', 'actions');
+                          }}
+                          className="bg-orange-600 hover:bg-orange-700 text-white"
+                        >
+                          Review
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Active Complaints */}
+                  {Array.isArray(complaints) && complaints.filter(complaint => complaint.status === 'active').length > 0 && (
+                    <div className="p-3 bg-white border border-orange-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-800 flex items-center space-x-2">
+                            <AlertTriangle className="w-4 h-4 text-red-600" />
+                            <span>Active Complaints ({complaints.filter(complaint => complaint.status === 'active').length})</span>
+                          </h4>
+                          <p className="text-sm text-gray-600">Require resolution</p>
+                        </div>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            setActiveTab('admin');
+                            sessionStorage.setItem('adminTargetTab', 'complaints');
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                          Review
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pending Biometric Requests */}
+                  {Array.isArray(biometricRequests) && biometricRequests.filter(req => req.status === 'pending').length > 0 && (
+                    <div className="p-3 bg-white border border-orange-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-800 flex items-center space-x-2">
+                            <Fingerprint className="w-4 h-4 text-blue-600" />
+                            <span>Biometric Requests ({biometricRequests.filter(req => req.status === 'pending').length})</span>
+                          </h4>
+                          <p className="text-sm text-gray-600">Require approval</p>
+                        </div>
+                        <Button 
+                          size="sm"
+                          onClick={() => {
+                            setActiveTab('admin');
+                            // Store the target tab in sessionStorage for admin dashboard to read
+                            sessionStorage.setItem('adminTargetTab', 'pending');
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          Review
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="shadow-md border-2 border-green-200 bg-green-50">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-center space-x-2">
+                  <UserCheck className="w-5 h-5 text-green-600" />
+                  <span className="font-medium text-green-800">All Clear! No pending requests</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {user?.role === 'watchman' && (
+        <div className="px-4 mb-6">
+          <h3 className="text-lg font-medium text-gray-800 mb-3">Watchman Quick Actions</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <Button 
+              onClick={() => setActiveTab('watchman')}
+              className="bg-green-600 text-white p-3 rounded-lg flex flex-col items-center justify-center gap-1 hover:bg-green-700 transition-colors"
+            >
+              <Shield className="w-5 h-5" />
+              <span className="text-xs">Dashboard</span>
+            </Button>
+            <Button 
+              onClick={() => setActiveTab('visitors')}
+              className="bg-blue-600 text-white p-3 rounded-lg flex flex-col items-center justify-center gap-1 hover:bg-blue-700 transition-colors"
+            >
+              <UserCheck className="w-5 h-5" />
+              <span className="text-xs">Visitors</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Committee Members for Normal Users */}
+      {user?.role === 'resident' && <CommitteeMembers />}
+
+      {/* Recent Posts */}
+      <div className="px-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-medium text-gray-800">Recent Posts</h3>
+          <div className="flex items-center gap-2">
+            {(user?.role === 'admin' || user?.role === 'super_admin') && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowRecentPosts(!showRecentPosts)}
+                className="text-gray-700"
+                data-testid="button-toggle-recent-posts"
+              >
+                {showRecentPosts ? 'Collapse' : 'Expand'}
+              </Button>
+            )}
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setActiveTab('community')}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              View All
+            </Button>
+          </div>
+        </div>
+        {postsLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i} className="shadow-sm">
+                <CardContent className="p-4">
+                  <div className="animate-pulse">
+                    <div className="flex space-x-3">
+                      <div className="w-10 h-10 bg-gray-300 rounded-full"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-300 rounded w-1/2"></div>
+                        <div className="h-12 bg-gray-300 rounded"></div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : posts?.length === 0 ? (
+          <Card className="shadow-sm">
+            <CardContent className="p-6 text-center">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Building className="w-6 h-6 text-gray-400" />
+              </div>
+              <p className="text-gray-600 text-sm">No posts yet</p>
+              <Button 
+                size="sm" 
+                onClick={() => setShowPostModal(true)}
+                className="mt-2"
+              >
+                Create First Post
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          showRecentPosts && (
+            <div className="space-y-3">
+              {posts?.slice(0, 3).map((post: PostWithAuthor) => (
+                <Card key={post.id} className="shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-start space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <span className="text-blue-600 font-medium text-sm">
+                          {post.author?.firstName?.charAt(0)}{post.author?.lastName?.charAt(0)}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="font-medium text-sm">
+                            {post.author?.firstName} {post.author?.lastName}
+                          </p>
+                          <Badge variant="outline" className="text-xs">
+                            {post.type}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">
+                          Flat {post.author?.unitNumber || 'Unknown'}
+                        </p>
+                        <h4 className="font-medium text-sm mb-1">{post.title}</h4>
+                        <p className="text-sm text-gray-600 line-clamp-2">{post.content}</p>
+                        <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                          <span>{post?.createdAt ? format(new Date(String(post.createdAt)), 'MMM dd, yyyy') : ''}</span>
+                          <span>{post.likes ?? 0} likes</span>
+                          <span>{post.comments?.length ?? 0} comments</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* Recent Bookings */}
+      <div className="px-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-medium text-gray-800">Recent Bookings</h3>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setActiveTab('bookings')}
+            className="text-blue-600 hover:text-blue-700"
+          >
+            View All
+          </Button>
+        </div>
+        {bookingsLoading ? (
+          <div className="space-y-3">
+            {[...Array(2)].map((_, i) => (
+              <Card key={i} className="shadow-sm">
+                <CardContent className="p-4">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-300 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-300 rounded w-3/4"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : bookings?.length === 0 ? (
+          <Card className="shadow-sm">
+            <CardContent className="p-4 text-center">
+              <Calendar className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-600 text-sm">No bookings yet</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {bookings?.filter((booking: any) => booking && booking.id).slice(0, 3).map((booking: any) => (
+              <Card key={booking.id} className="shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                        <Calendar className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-sm">{booking.amenityName || 'Unknown Amenity'}</h4>
+                        <p className="text-sm text-gray-600">
+                          {booking.bookingDate ? format(new Date(booking.bookingDate), 'MMM dd, yyyy') : 'Date not available'} • {booking.startTime || '00:00'} - {booking.endTime || '00:00'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className="bg-green-100 text-green-800">
+                      {booking.status || 'confirmed'}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Maintenance Requests (for admins) */}
+      {(user?.role === 'admin' || user?.role === 'super_admin') && (
+        <div className="px-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-medium text-gray-800">Recent Maintenance Requests</h3>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setActiveTab('admin')}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              View All
+            </Button>
+          </div>
+          <Card className="shadow-sm">
+            <CardContent className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-center space-x-3">
+                  <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                    <Wrench className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Maintenance Dashboard</p>
+                    <p className="text-sm text-gray-600">View and manage maintenance requests</p>
+                  </div>
+                  <Button 
+                    size="sm"
+                    onClick={() => setActiveTab('admin')}
+                    variant="outline"
+                  >
+                    Manage
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Quick Stats */}
+      <div className="px-4">
+        <h3 className="text-lg font-medium text-gray-800 mb-3">Quick Stats</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <Building className="w-5 h-5 text-blue-600 mr-2" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Posts</p>
+                  <p className="text-lg font-bold">{posts?.length || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center">
+                <Calendar className="w-5 h-5 text-green-600 mr-2" />
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Bookings</p>
+                  <p className="text-lg font-bold">{bookings?.length || 0}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderCommunityTab = () => (
     <div className="space-y-4 pb-20">
@@ -213,7 +666,19 @@ export function MobileLayout() {
 
   const renderBookingsTab = () => (
     <div className="space-y-6 pb-20 px-4">
-      <h2 className="text-lg font-medium text-gray-800" data-testid="text-amenity-bookings">Amenity Bookings</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-medium text-gray-800" data-testid="text-amenity-bookings">Amenity Bookings</h2>
+        {(user?.role === 'admin' || user?.role === 'super_admin') && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowBookingManagementModal(true)}
+            className="text-blue-600 hover:text-blue-700"
+          >
+            Manage All Bookings
+          </Button>
+        )}
+      </div>
       
       {/* Booking Options */}
       <div className="space-y-4">
@@ -261,20 +726,28 @@ export function MobileLayout() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {bookings?.map((booking: BookingWithAmenity) => (
+            {bookings?.filter((booking: any) => booking && booking.id).map((booking: any) => (
               <Card key={booking.id} className="border border-green-200 bg-green-50" data-testid={`booking-${booking.id}`}>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="font-medium text-green-800" data-testid={`text-booking-name-${booking.id}`}>
-                        {booking.amenity.name}
+                        {booking.amenityName || 'Unknown Amenity'}
                       </h4>
                       <p className="text-green-600 text-sm" data-testid={`text-booking-time-${booking.id}`}>
-                        {format(new Date(booking.bookingDate), 'MMM d, yyyy')} • {booking.startTime} - {booking.endTime}
+                        {booking.bookingDate ? format(new Date(booking.bookingDate), 'MMM d, yyyy') : 'Date not available'} • {booking.startTime || '00:00'} - {booking.endTime || '00:00'}
+                      </p>
+                      <p className="text-green-600 text-xs mt-1">
+                        Booked by: {booking.firstName} {booking.lastName} {booking.unitNumber && `(${booking.unitNumber})`}
                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Badge className="bg-green-100 text-green-800">
+                      <Badge className={
+                        booking.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        booking.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        booking.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
+                        'bg-red-100 text-red-800'
+                      }>
                         {booking.status}
                       </Badge>
                       {booking.status === 'confirmed' && (
@@ -288,6 +761,11 @@ export function MobileLayout() {
                         >
                           Cancel
                         </Button>
+                      )}
+                      {booking.status === 'pending' && (
+                        <span className="text-xs text-yellow-600">
+                          Awaiting approval
+                        </span>
                       )}
                     </div>
                   </div>
@@ -305,6 +783,7 @@ export function MobileLayout() {
     const getServiceTabs = () => {
       const baseTabs = [
         { id: 'overview', label: 'Overview', icon: Settings },
+        { id: 'messages', label: 'Messages', icon: MessageSquare },
         { id: 'biometric', label: 'Biometric', icon: Fingerprint },
         { id: 'documents', label: 'Documents', icon: FileText },
       ];
@@ -490,6 +969,7 @@ export function MobileLayout() {
             </div>
           )}
 
+          {activeServiceTab === 'messages' && <MessagingTab />}
           {activeServiceTab === 'biometric' && <BiometricAccessTab />}
           {activeServiceTab === 'documents' && <TenantDocumentsTab />}
           {activeServiceTab === 'reports' && (user?.role === 'admin' || user?.role === 'super_admin') && <BookingReportsTab />}
@@ -535,7 +1015,15 @@ export function MobileLayout() {
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => window.location.href = '/api/logout'}
+              onClick={async () => {
+                try {
+                  await fetch('/api/auth/logout', { credentials: 'include' });
+                  window.location.href = '/login';
+                } catch (error) {
+                  console.error('Logout error:', error);
+                  window.location.href = '/login';
+                }
+              }}
               className="p-2 rounded-full hover:bg-white hover:bg-opacity-20 text-white transition-colors"
               data-testid="button-logout"
             >
@@ -548,12 +1036,13 @@ export function MobileLayout() {
       {/* Content */}
       <div className="flex-1 overflow-auto bg-gray-50">
         <div className="pt-4">
+          {activeTab === 'home' && renderHomeTab()}
           {activeTab === 'community' && renderCommunityTab()}
           {activeTab === 'bookings' && renderBookingsTab()}
-          {activeTab === 'messages' && <MessagingTab />}
+          {activeTab === 'visitors' && <VisitorsTab />}
           {activeTab === 'services' && renderServicesTab()}
           {activeTab === 'watchman' && user?.role === 'watchman' && <WatchmanDashboard />}
-          {activeTab === 'admin' && (user?.role === 'admin' || user?.role === 'super_admin') && <AdminDashboard />}
+          {activeTab === 'admin' && (user?.role === 'admin' || user?.role === 'super_admin') && <MobileAdminDashboard />}
         </div>
       </div>
 
@@ -570,6 +1059,21 @@ export function MobileLayout() {
           amenityId={selectedAmenity.id}
           amenityName={selectedAmenity.name}
           amenityType={selectedAmenity.type}
+        />
+      )}
+
+      <BookingManagementModal
+        open={showBookingManagementModal}
+        onOpenChange={setShowBookingManagementModal}
+        bookings={(Array.isArray(bookings) ? bookings : []) as any}
+      />
+
+      {/* Comments Modal */}
+      {commentPostId && (
+        <Comments
+          postId={commentPostId}
+          isOpen={true}
+          onClose={() => setCommentPostId(null)}
         />
       )}
     </div>

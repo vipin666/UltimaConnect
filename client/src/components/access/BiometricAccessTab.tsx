@@ -25,11 +25,17 @@ type RequestFormData = z.infer<typeof requestFormSchema>;
 
 export function BiometricAccessTab() {
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const queryClient = useQueryClient();
   const [showNewRequestForm, setShowNewRequestForm] = useState(false);
 
   const { data: requests, isLoading } = useQuery({
     queryKey: ["/api/biometric-requests"],
+  });
+
+  const { data: biometricStatus } = useQuery({
+    queryKey: [`/api/biometric-access/status/${user?.id}`],
+    enabled: !!user?.id && !isAdmin,
   });
 
   const form = useForm<RequestFormData>({
@@ -132,8 +138,6 @@ export function BiometricAccessTab() {
     );
   }
 
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -150,6 +154,31 @@ export function BiometricAccessTab() {
           </Button>
         )}
       </div>
+
+      {/* User's Biometric Status */}
+      {!isAdmin && biometricStatus && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Fingerprint className="h-4 w-4 text-green-600" />
+              </div>
+              <div>
+                <h4 className="font-medium text-green-800">Biometric Access Active</h4>
+                <p className="text-sm text-green-600">
+                  {biometricStatus.requestType.charAt(0).toUpperCase() + biometricStatus.requestType.slice(1)} Access • {biometricStatus.accessLevel} Level
+                </p>
+                <p className="text-xs text-green-500">
+                  Approved: {format(new Date(biometricStatus.approvedDate), "MMM dd, yyyy")}
+                  {biometricStatus.expiryDate && (
+                    <span> • Expires: {format(new Date(biometricStatus.expiryDate), "MMM dd, yyyy")}</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* New Request Form */}
       {showNewRequestForm && !isAdmin && (

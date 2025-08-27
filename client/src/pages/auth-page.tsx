@@ -300,7 +300,7 @@ export default function AuthPage() {
                   <Button
                     variant="outline"
                     className="w-full"
-                    onClick={() => window.location.href = "/api/login"}
+                    onClick={() => window.location.href = "/login"}
                   >
                     Sign in with Replit
                   </Button>
