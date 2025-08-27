@@ -1,0 +1,9 @@
+export { User, type IUser } from './User';
+export { Flat, type IFlat } from './Flat';
+export { Post, type IPost } from './Post';
+export { Comment, type IComment } from './Comment';
+export { PostLike, type IPostLike } from './PostLike';
+export { Amenity, type IAmenity } from './Amenity';
+export { Booking, type IBooking } from './Booking';
+export { Visitor, type IVisitor } from './Visitor';
+export { BiometricRequest, type IBiometricRequest } from './BiometricRequest';

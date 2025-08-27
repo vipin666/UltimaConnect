@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { mongoStorage } from "./services/mongoStorage";
 import { setupAuth, isAuthenticated } from "./localAuth";
 import { hashPassword, comparePasswords, generateResetToken, getPasswordResetTokenExpiry, isPasswordResetTokenExpired } from "./auth";
 import { LocalStorageService } from "./localStorage";
@@ -77,7 +77,7 @@ function generateTimeSlots(amenityType: string) {
 async function validateConsecutiveDayBookings(userId: string, amenityId: string, bookingDate: string) {
   try {
     // Get user's existing bookings for this amenity
-    const userBookings = await storage.getUserBookings(userId);
+    const userBookings = await mongoStorage.getBookingsByUser(userId);
     const guestParkingBookings = userBookings.filter((booking: any) => 
       booking.amenityId === amenityId && 
       (booking.status === 'confirmed' || booking.status === 'pending')
@@ -134,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       { usernameField: 'username', passwordField: 'password' },
       async (username, password, done) => {
         try {
-          const user = await storage.getUserByUsername(username.toLowerCase());
+          const user = await mongoStorage.getUserByUsername(username.toLowerCase());
           if (!user || !user.password) {
             return done(null, false, { message: 'Invalid username or password' });
           }
@@ -183,12 +183,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { username, password, firstName, lastName, email, unitNumber } = req.body;
       
       // Check if user already exists
-      const existingUser = await storage.getUserByUsername(username.toLowerCase());
+      const existingUser = await mongoStorage.getUserByUsername(username.toLowerCase());
       if (existingUser) {
         return res.status(400).json({ message: 'Username already exists' });
       }
       
-      const existingEmail = await storage.getUserByEmail(email);
+      const existingEmail = await mongoStorage.getUserByEmail(email);
       if (existingEmail) {
         return res.status(400).json({ message: 'Email already exists' });
       }
@@ -209,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isOwner: true,
       };
       
-      const user = await storage.createUser(userData);
+      const user = await mongoStorage.createUser(userData);
       
       res.status(201).json({ 
         message: 'Registration successful. Please wait for admin approval.',
@@ -231,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { email } = req.body;
       
-      const user = await storage.getUserByEmail(email);
+      const user = await mongoStorage.getUserByEmail(email);
       if (!user) {
         // Don't reveal if email exists for security
         return res.json({ message: 'If that email exists, a reset link has been sent.' });
@@ -241,7 +241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = generateResetToken();
       const expiresAt = getPasswordResetTokenExpiry();
       
-      await storage.createPasswordResetToken({
+      await mongoStorage.createPasswordResetToken({
         userId: user.id,
         token,
         expiresAt,
@@ -266,17 +266,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Token and new password are required' });
       }
       
-      const resetToken = await storage.getPasswordResetToken(token);
+      const resetToken = await mongoStorage.getPasswordResetToken(token);
       if (!resetToken || resetToken.used || isPasswordResetTokenExpired(resetToken.expiresAt)) {
         return res.status(400).json({ message: 'Invalid or expired reset token' });
       }
       
       // Hash new password and update user
       const hashedPassword = await hashPassword(newPassword);
-      await storage.updateUserPassword(resetToken.userId, hashedPassword);
+      await mongoStorage.updateUserPassword(resetToken.userId, hashedPassword);
       
       // Mark token as used
-      await storage.markTokenAsUsed(resetToken.id);
+      await mongoStorage.markTokenAsUsed(resetToken.id);
       
       res.json({ message: 'Password reset successfully' });
     } catch (error) {
@@ -292,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (req.user.claims) {
           // Replit Auth user
           const userEmail = req.user.claims.email;
-          const allUsers = await storage.getAllUsers();
+          const allUsers = await mongoStorage.getAllUsers();
           const user = allUsers.find((u: any) => u.email === userEmail);
           res.json(user || null);
         } else {
@@ -311,7 +311,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get residents for visitor host selection
   app.get('/api/users/residents', isAuthenticated, async (req: any, res) => {
     try {
-      const residents = await storage.getResidents();
+      const residents = await mongoStorage.getResidents();
       res.json(residents);
     } catch (error) {
       console.error("Error fetching residents:", error);
@@ -328,7 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: 'Unauthorized' });
       }
       
-      const users = await storage.getAllUsers();
+      const users = await mongoStorage.getAllUsers();
       res.json(users);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -347,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { username, password, firstName, lastName, email, unitNumber, role, isOwner } = req.body;
       
       // Check if user already exists
-      const existingUser = await storage.getUserByUsername(username.toLowerCase());
+      const existingUser = await mongoStorage.getUserByUsername(username.toLowerCase());
       if (existingUser) {
         return res.status(400).json({ message: 'Username already exists' });
       }
@@ -367,7 +367,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isOwner: isOwner ?? true,
       };
       
-      const user = await storage.createUser(userData);
+      const user = await mongoStorage.createUser(userData);
       res.status(201).json(user);
     } catch (error) {
       console.error('Error creating user:', error);
@@ -384,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const { status } = req.body;
-      const updatedUser = await storage.updateUserStatus(req.params.userId, status);
+      const updatedUser = await mongoStorage.updateUserStatus(req.params.userId, status);
       res.json(updatedUser);
     } catch (error) {
       console.error('Error updating user status:', error);
@@ -397,7 +397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Committee members endpoint (accessible to all authenticated users)
   app.get('/api/committee-members', isAuthenticated, async (req: any, res) => {
     try {
-      const users = await storage.getAllUsers();
+      const users = await mongoStorage.getAllUsers();
       const committeeMembers = users.filter((user: any) => 
         ['caretaker', 'secretary', 'president', 'treasurer', 'committee_member'].includes(user.role)
       );
@@ -417,7 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const users = await storage.getAllUsers();
+      const users = await mongoStorage.getAllUsers();
       res.json(users);
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -435,7 +435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const updatedUser = await storage.updateUser(targetUserId, updates);
+      const updatedUser = await mongoStorage.updateUser(targetUserId, updates);
       res.json(updatedUser);
     } catch (error) {
       console.error("Error updating user:", error);
@@ -453,7 +453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const updatedUser = await storage.updateUserStatus(targetUserId, status);
+      const updatedUser = await mongoStorage.updateUserStatus(targetUserId, status);
       res.json(updatedUser);
     } catch (error) {
       console.error("Error updating user status:", error);
@@ -472,7 +472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const updatedUser = await storage.updateUserRole(targetUserId, role);
+      const updatedUser = await mongoStorage.updateUserRole(targetUserId, role);
       res.json(updatedUser);
     } catch (error) {
       console.error("Error updating user role:", error);
@@ -491,7 +491,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const updatedUser = await storage.updateUser(targetUserId, updates);
+      const updatedUser = await mongoStorage.updateUser(targetUserId, updates);
       res.json(updatedUser);
     } catch (error) {
       console.error("Error updating user:", error);
@@ -514,7 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Cannot delete your own account" });
       }
       
-      await storage.deleteUser(targetUserId);
+      await mongoStorage.deleteUser(targetUserId);
       res.json({ message: "User deleted successfully" });
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -529,9 +529,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let posts;
       if (type) {
-        posts = await storage.getPostsByType(type as string);
+        posts = await mongoStorage.getPostsByType(type as string);
       } else {
-        posts = await storage.getPosts();
+        posts = await mongoStorage.getPosts();
       }
       
       res.json(posts);
@@ -549,7 +549,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         authorId: userId,
       });
       
-      const post = await storage.createPost(postData);
+      const post = await mongoStorage.createPost(postData);
       res.json(post);
     } catch (error) {
       console.error("Error creating post:", error);
@@ -570,7 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const post = await storage.updatePostStatus(postId, status, adminComment);
+      const post = await mongoStorage.updatePostStatus(postId, status, adminComment);
       res.json(post);
     } catch (error) {
       console.error("Error updating post status:", error);
@@ -582,7 +582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const postId = req.params.postId;
-      const post = await storage.likePost(postId, userId);
+      const post = await mongoStorage.likePost(postId, userId);
       res.json(post);
     } catch (error) {
       console.error("Error liking post:", error);
@@ -594,7 +594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const postId = req.params.postId;
-      const hasLiked = await storage.hasUserLikedPost(postId, userId);
+      const hasLiked = await mongoStorage.hasUserLikedPost(postId, userId);
       res.json({ hasLiked });
     } catch (error) {
       console.error("Error checking like status:", error);
@@ -605,7 +605,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/posts/:postId/likes', isAuthenticated, async (req: any, res) => {
     try {
       const postId = req.params.postId;
-      const likes = await storage.getPostLikes(postId);
+      const likes = await mongoStorage.getPostLikes(postId);
       res.json(likes);
     } catch (error) {
       console.error("Error fetching post likes:", error);
@@ -617,7 +617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/posts/:postId/comments', isAuthenticated, async (req: any, res) => {
     try {
       const postId = req.params.postId;
-      const comments = await storage.getComments(postId);
+      const comments = await mongoStorage.getComments(postId);
       res.json(comments);
     } catch (error) {
       console.error("Error fetching comments:", error);
@@ -635,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         authorId: userId,
       });
       
-      const comment = await storage.createComment(commentData);
+      const comment = await mongoStorage.createComment(commentData);
       res.json(comment);
     } catch (error) {
       console.error("Error creating comment:", error);
@@ -650,10 +650,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const commentId = req.params.commentId;
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       // Get the comment to check ownership
-      const comment = await storage.getComment(commentId);
+      const comment = await mongoStorage.getComment(commentId);
       
       if (!comment) {
         return res.status(404).json({ message: "Comment not found" });
@@ -664,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You can only delete your own comments" });
       }
       
-      await storage.deleteComment(commentId);
+      await mongoStorage.deleteComment(commentId);
       res.json({ message: "Comment deleted successfully" });
     } catch (error) {
       console.error("Error deleting comment:", error);
@@ -675,7 +675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Amenity routes
   app.get('/api/amenities', isAuthenticated, async (req, res) => {
     try {
-      const amenities = await storage.getAmenities();
+      const amenities = await mongoStorage.getAmenities();
       res.json(amenities);
     } catch (error) {
       console.error("Error fetching amenities:", error);
@@ -691,10 +691,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let bookings;
       if (user.role === 'admin' || user.role === 'super_admin') {
         // Admins see all bookings
-        bookings = await storage.getBookings();
+        bookings = await mongoStorage.getBookings();
       } else {
         // Regular users see only their own bookings
-        bookings = await storage.getBookingsByUser(user.id);
+        bookings = await mongoStorage.getBookingsByUser(user.id);
       }
       
       res.json(bookings);
@@ -707,7 +707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/bookings', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user) {
         return res.status(404).json({ message: "User not found" });
@@ -724,7 +724,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bookingStatus = isAdmin ? 'confirmed' : 'pending';
       
       // Get amenity details to check if it's guest parking
-      const amenity = await storage.getAmenity(bookingData.amenityId);
+      const amenity = await mongoStorage.getAmenity(bookingData.amenityId);
       if (!amenity) {
         return res.status(404).json({ message: "Amenity not found" });
       }
@@ -747,7 +747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Check for conflicts (only consider confirmed bookings as conflicts)
-      const existingBookings = await storage.getBookingsByAmenityAndDate(
+      const existingBookings = await mongoStorage.getBookingsByAmenityAndDate(
         bookingData.amenityId,
         bookingData.bookingDate
       );
@@ -788,7 +788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Time slot is already booked" });
       }
       
-      const booking = await storage.createBooking({
+      const booking = await mongoStorage.createBooking({
         ...bookingData,
         status: bookingStatus
       });
@@ -837,7 +837,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const userBookings = await storage.getUserBookings(userId);
+      const userBookings = await mongoStorage.getUserBookings(userId);
       res.json(userBookings);
     } catch (error) {
       console.error("Error fetching user bookings:", error);
@@ -854,10 +854,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Get existing bookings for the date and amenity
-      const existingBookings = await storage.getBookingsByAmenityAndDate(amenityId, date);
+      const existingBookings = await mongoStorage.getBookingsByAmenityAndDate(amenityId, date);
       
       // Get amenity details to determine available slots
-      const amenity = await storage.getAmenity(amenityId);
+      const amenity = await mongoStorage.getAmenity(amenityId);
       if (!amenity) {
         return res.status(404).json({ message: "Amenity not found" });
       }
@@ -917,7 +917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/bookings/:bookingId/cancel', isAuthenticated, async (req: any, res) => {
     try {
       const bookingId = req.params.bookingId;
-      const booking = await storage.cancelBooking(bookingId);
+      const booking = await mongoStorage.cancelBooking(bookingId);
       res.json(booking);
     } catch (error) {
       console.error("Error cancelling booking:", error);
@@ -935,7 +935,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const bookingId = req.params.bookingId;
-      const booking = await storage.updateBooking(bookingId, { status: 'confirmed' });
+      const booking = await mongoStorage.updateBooking(bookingId, { status: 'confirmed' });
       res.json(booking);
     } catch (error) {
       console.error("Error approving booking:", error);
@@ -955,7 +955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bookingId = req.params.bookingId;
       const { reason } = req.body;
       
-      const booking = await storage.rejectBooking(bookingId, reason);
+      const booking = await mongoStorage.rejectBooking(bookingId, reason);
       res.json(booking);
     } catch (error) {
       console.error("Error rejecting booking:", error);
@@ -975,10 +975,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let notifications;
       if (user.role === 'watchman') {
         // Watchman sees all active guest notifications
-        notifications = await storage.getGuestNotifications();
+        notifications = await mongoStorage.getGuestNotifications();
       } else {
         // Residents see only their own notifications
-        notifications = await storage.getUserGuestNotifications(user.id);
+        notifications = await mongoStorage.getUserGuestNotifications(user.id);
       }
       
       res.json(notifications);
@@ -997,7 +997,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const notificationData = insertGuestNotificationSchema.parse(req.body);
-      const notification = await storage.createGuestNotification(notificationData);
+      const notification = await mongoStorage.createGuestNotification(notificationData);
       res.json(notification);
     } catch (error) {
       console.error("Error creating guest notification:", error);
@@ -1017,7 +1017,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const notification = await storage.updateGuestNotification(notificationId, req.body);
+      const notification = await mongoStorage.updateGuestNotification(notificationId, req.body);
       res.json(notification);
     } catch (error) {
       console.error("Error updating guest notification:", error);
@@ -1035,7 +1035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized - Watchman access required" });
       }
       
-      const updatedNotification = await storage.updateGuestNotification(notificationId, {
+      const updatedNotification = await mongoStorage.updateGuestNotification(notificationId, {
         watchmanApproved: approved,
         watchmanNotes: notes,
       });
@@ -1050,7 +1050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Messages endpoints
   app.get('/api/messages', isAuthenticated, async (req: any, res) => {
     try {
-      const messages = await storage.getMessages();
+      const messages = await mongoStorage.getMessages();
       res.json(messages);
     } catch (error) {
       console.error("Error fetching messages:", error);
@@ -1066,7 +1066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         senderId,
       });
       
-      const message = await storage.createMessage(messageData);
+      const message = await mongoStorage.createMessage(messageData);
       res.json(message);
     } catch (error) {
       console.error("Error creating message:", error);
@@ -1080,7 +1080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/messages/:messageId/read', isAuthenticated, async (req: any, res) => {
     try {
       const { messageId } = req.params;
-      const message = await storage.markMessageAsRead(messageId);
+      const message = await mongoStorage.markMessageAsRead(messageId);
       res.json(message);
     } catch (error) {
       console.error("Error marking message as read:", error);
@@ -1097,7 +1097,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const announcements = await storage.getAnnouncementsForRole(user.role);
+      const announcements = await mongoStorage.getAnnouncementsForRole(user.role);
       res.json(announcements);
     } catch (error) {
       console.error("Error fetching announcements:", error);
@@ -1118,7 +1118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         authorId: user.id,
       });
       
-      const announcement = await storage.createAnnouncement(announcementData);
+      const announcement = await mongoStorage.createAnnouncement(announcementData);
       res.json(announcement);
     } catch (error) {
       console.error("Error creating announcement:", error);
@@ -1140,9 +1140,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let requests;
       if (user.role === 'admin' || user.role === 'super_admin') {
-        requests = await storage.getMaintenanceRequests();
+        requests = await mongoStorage.getMaintenanceRequests();
       } else {
-        requests = await storage.getMaintenanceRequests(); // For now, return all requests
+        requests = await mongoStorage.getMaintenanceRequests(); // For now, return all requests
       }
       
       res.json(requests);
@@ -1166,7 +1166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         unitNumber: user.unitNumber,
       });
       
-      const request = await storage.createMaintenanceRequest(requestData);
+      const request = await mongoStorage.createMaintenanceRequest(requestData);
       res.json(request);
     } catch (error) {
       console.error("Error creating maintenance request:", error);
@@ -1187,7 +1187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
       
-      const updatedRequest = await storage.updateMaintenanceRequestStatus(requestId, status, assignedTo);
+      const updatedRequest = await mongoStorage.updateMaintenanceRequestStatus(requestId, status, assignedTo);
       res.json(updatedRequest);
     } catch (error) {
       console.error("Error updating maintenance request status:", error);
@@ -1204,7 +1204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const report = await storage.getBookingReport();
+      const report = await mongoStorage.getBookingReport();
       res.json(report);
     } catch (error) {
       console.error("Error fetching booking reports:", error);
@@ -1216,7 +1216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/biometric-requests", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.id || req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user) {
         return res.status(401).json({ message: "User not found" });
@@ -1225,10 +1225,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let requests;
       if (['admin', 'super_admin'].includes(user.role)) {
         // Admins can see all requests
-        requests = await storage.getBiometricRequests();
+        requests = await mongoStorage.getBiometricRequests();
       } else {
         // Regular users can only see their own requests
-        requests = await storage.getBiometricRequestsByUserId(userId);
+        requests = await mongoStorage.getBiometricRequestsByUserId(userId);
       }
       
       res.json(requests);
@@ -1246,7 +1246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
       });
       
-      const request = await storage.createBiometricRequest(validatedData);
+      const request = await mongoStorage.createBiometricRequest(validatedData);
       res.status(201).json(request);
     } catch (error) {
       console.error("Error creating biometric request:", error);
@@ -1257,7 +1257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/biometric-requests/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.id || req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: "Access denied" });
@@ -1269,7 +1269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approvedDate: req.body.status === 'approved' ? new Date() : null,
       };
       
-      const request = await storage.updateBiometricRequest(req.params.id, updates);
+      const request = await mongoStorage.updateBiometricRequest(req.params.id, updates);
       if (!request) {
         return res.status(404).json({ message: "Biometric request not found" });
       }
@@ -1285,7 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/biometric-access/enable", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: "Access denied" });
@@ -1297,7 +1297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      const result = await storage.enableBiometricAccess(targetUserId, requestType, accessLevel);
+      const result = await mongoStorage.enableBiometricAccess(targetUserId, requestType, accessLevel);
       res.json(result);
     } catch (error) {
       console.error("Error enabling biometric access:", error);
@@ -1319,7 +1319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing user ID" });
       }
 
-      const result = await storage.disableBiometricAccess(targetUserId);
+      const result = await mongoStorage.disableBiometricAccess(targetUserId);
       res.json(result);
     } catch (error) {
       console.error("Error disabling biometric access:", error);
@@ -1339,7 +1339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const status = await storage.getUserBiometricStatus(targetUserId);
+      const status = await mongoStorage.getUserBiometricStatus(targetUserId);
       res.json(status);
     } catch (error) {
       console.error("Error fetching biometric status:", error);
@@ -1356,7 +1356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const flats = await storage.getFlats();
+      const flats = await mongoStorage.getFlats();
       res.json(flats);
     } catch (error) {
       console.error("Error fetching flats:", error);
@@ -1366,7 +1366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/units", isAuthenticated, async (req: any, res) => {
     try {
-      const units = await storage.getUniqueUnitNumbers();
+      const units = await mongoStorage.getUniqueUnitNumbers();
       res.json(units);
     } catch (error) {
       console.error("Error fetching units:", error);
@@ -1382,7 +1382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const flat = await storage.createFlat(req.body);
+      const flat = await mongoStorage.createFlat(req.body);
       res.status(201).json(flat);
     } catch (error) {
       console.error("Error creating flat:", error);
@@ -1398,7 +1398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const flat = await storage.updateFlat(req.params.id, req.body);
+      const flat = await mongoStorage.updateFlat(req.params.id, req.body);
       if (!flat) {
         return res.status(404).json({ message: "Flat not found" });
       }
@@ -1418,7 +1418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      await storage.deleteFlat(req.params.id);
+      await mongoStorage.deleteFlat(req.params.id);
       res.json({ message: "Flat deleted successfully" });
     } catch (error) {
       console.error("Error deleting flat:", error);
@@ -1429,7 +1429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/flats/:id/assign", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: "Access denied" });
@@ -1441,7 +1441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      const flat = await storage.assignFlatToUser(req.params.id, targetUserId, isOwner);
+      const flat = await mongoStorage.assignFlatToUser(req.params.id, targetUserId, isOwner);
       res.json(flat);
     } catch (error) {
       console.error("Error assigning flat:", error);
@@ -1452,13 +1452,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/flats/:id/unassign", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const flat = await storage.unassignFlatFromUser(req.params.id);
+      const flat = await mongoStorage.unassignFlatFromUser(req.params.id);
       res.json(flat);
     } catch (error) {
       console.error("Error unassigning flat:", error);
@@ -1470,7 +1470,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tenant-documents", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user) {
         return res.status(401).json({ message: "User not found" });
@@ -1479,10 +1479,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let documents;
       if (['admin', 'super_admin'].includes(user.role)) {
         // Admins can see all documents
-        documents = await storage.getTenantDocuments();
+        documents = await mongoStorage.getTenantDocuments();
       } else {
         // Regular users can only see their own documents
-        documents = await storage.getTenantDocumentsByUserId(userId);
+        documents = await mongoStorage.getTenantDocumentsByUserId(userId);
       }
       
       res.json(documents);
@@ -1500,7 +1500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
       });
       
-      const document = await storage.createTenantDocument(validatedData);
+      const document = await mongoStorage.createTenantDocument(validatedData);
       res.status(201).json(document);
     } catch (error) {
       console.error("Error creating tenant document:", error);
@@ -1511,7 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/tenant-documents/:id", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: "Access denied" });
@@ -1523,7 +1523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reviewDate: new Date(),
       };
       
-      const document = await storage.updateTenantDocument(req.params.id, updates);
+      const document = await mongoStorage.updateTenantDocument(req.params.id, updates);
       if (!document) {
         return res.status(404).json({ message: "Tenant document not found" });
       }
@@ -1540,7 +1540,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fee Types
   app.get('/api/fee-types', isAuthenticated, async (req, res) => {
     try {
-              const feeTypes = await storage.getFeeTypes();
+              const feeTypes = await mongoStorage.getFeeTypes();
       res.json(feeTypes);
     } catch (error) {
       console.error('Error fetching fee types:', error);
@@ -1551,12 +1551,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/fee-types', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const feeType = await storage.createFeeType(req.body);
+      const feeType = await mongoStorage.createFeeType(req.body);
       res.status(201).json(feeType);
     } catch (error) {
       console.error('Error creating fee type:', error);
@@ -1567,12 +1567,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/fee-types/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const feeType = await storage.updateFeeType(req.params.id, req.body);
+      const feeType = await mongoStorage.updateFeeType(req.params.id, req.body);
       res.json(feeType);
     } catch (error) {
       console.error('Error updating fee type:', error);
@@ -1583,12 +1583,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/fee-types/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      await storage.deleteFeeType(req.params.id);
+      await mongoStorage.deleteFeeType(req.params.id);
       res.status(204).send();
     } catch (error) {
       console.error('Error deleting fee type:', error);
@@ -1599,7 +1599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fee Schedules
   app.get('/api/fee-schedules', isAuthenticated, async (req, res) => {
     try {
-              const feeSchedules = await storage.getFeeSchedules();
+              const feeSchedules = await mongoStorage.getFeeSchedules();
       res.json(feeSchedules);
     } catch (error) {
       console.error('Error fetching fee schedules:', error);
@@ -1610,12 +1610,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/fee-schedules', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const feeSchedule = await storage.createFeeSchedule(req.body);
+      const feeSchedule = await mongoStorage.createFeeSchedule(req.body);
       res.status(201).json(feeSchedule);
     } catch (error) {
       console.error('Error creating fee schedule:', error);
@@ -1627,13 +1627,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/fee-transactions', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       let transactions;
 
       if (user && ['admin', 'super_admin'].includes(user.role)) {
-        transactions = await storage.getAllFeeTransactions();
+        transactions = await mongoStorage.getAllFeeTransactions();
       } else {
-        transactions = await storage.getFeeTransactionsByUser(userId);
+        transactions = await mongoStorage.getFeeTransactionsByUser(userId);
       }
 
       res.json(transactions);
@@ -1645,13 +1645,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/fee-transactions/:id', isAuthenticated, async (req: any, res) => {
     try {
-      const transaction = await storage.getFeeTransactionById(req.params.id);
+      const transaction = await mongoStorage.getFeeTransactionById(req.params.id);
       if (!transaction) {
         return res.status(404).json({ message: 'Transaction not found' });
       }
 
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       // Users can only see their own transactions unless they're admin
       if (!user || (!['admin', 'super_admin'].includes(user.role) && transaction.userId !== userId)) {
@@ -1668,13 +1668,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/fee-transactions/generate-monthly', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
       const { month, year } = req.body;
-      const transactions = await storage.generateMonthlyFees(month, year);
+      const transactions = await mongoStorage.generateMonthlyFees(month, year);
       res.json({ 
         message: `Generated ${transactions.length} fee transactions for ${month}/${year}`,
         transactions 
@@ -1689,13 +1689,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       let payments;
 
       if (user && ['admin', 'super_admin'].includes(user.role)) {
-        payments = await storage.getAllPayments();
+        payments = await mongoStorage.getAllPayments();
       } else {
-        payments = await storage.getPaymentsByUser(userId);
+        payments = await mongoStorage.getPaymentsByUser(userId);
       }
 
       res.json(payments);
@@ -1708,7 +1708,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/payments', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       // Set the processedBy field based on user role
       const paymentData = {
@@ -1716,7 +1716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         processedBy: user && ['admin', 'super_admin'].includes(user.role) ? userId : undefined,
       };
 
-      const payment = await storage.createPayment(paymentData);
+      const payment = await mongoStorage.createPayment(paymentData);
       res.status(201).json(payment);
     } catch (error) {
       console.error('Error creating payment:', error);
@@ -1728,12 +1728,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/financial/summary', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const summary = await storage.getFinancialSummary();
+      const summary = await mongoStorage.getFinancialSummary();
       res.json(summary);
     } catch (error) {
       console.error('Error fetching financial summary:', error);
@@ -1744,7 +1744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/financial/monthly-collection', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
@@ -1754,7 +1754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Month and year are required' });
       }
 
-      const report = await storage.getMonthlyCollectionReport(month as string, year as string);
+      const report = await mongoStorage.getMonthlyCollectionReport(month as string, year as string);
       res.json(report);
     } catch (error) {
       console.error('Error fetching monthly collection report:', error);
@@ -1780,7 +1780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const notifications = await storage.getNotificationsByUser(userId);
+      const notifications = await mongoStorage.getNotificationsByUser(userId);
       res.json(notifications);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -1791,13 +1791,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/notifications/unread', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const notifications = await storage.getAllUnreadNotifications();
+      const notifications = await mongoStorage.getAllUnreadNotifications();
       res.json(notifications);
     } catch (error) {
       console.error('Error fetching unread notifications:', error);
@@ -1808,7 +1808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/notifications/:id/read', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      await storage.markNotificationAsRead(id);
+      await mongoStorage.markNotificationAsRead(id);
       res.json({ message: 'Notification marked as read' });
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -1820,13 +1820,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/defaulters', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      const defaulters = await storage.getAllDefaulters();
+      const defaulters = await mongoStorage.getAllDefaulters();
       res.json(defaulters);
     } catch (error) {
       console.error('Error fetching defaulters:', error);
@@ -1838,7 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/payments/mark-received', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
         return res.status(403).json({ message: 'Unauthorized' });
@@ -1850,7 +1850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Transaction ID, amount, and payment method are required' });
       }
 
-      const payment = await storage.markPaymentReceived(transactionId, {
+      const payment = await mongoStorage.markPaymentReceived(transactionId, {
         amount,
         paymentMethod,
         referenceNumber,
@@ -1869,14 +1869,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/admin/process-overdue', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
 
-      await storage.processOverduePayments();
-      const notifications = await storage.generateDailyNotifications();
+      await mongoStorage.processOverduePayments();
+      const notifications = await mongoStorage.generateDailyNotifications();
       
       res.json({ 
         message: 'Overdue processing completed',
@@ -1892,7 +1892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/visitors', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
@@ -1900,13 +1900,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let visitors;
       if (user.role === 'admin' || user.role === 'super_admin') {
         // Admin can see all visitors
-        visitors = await storage.getVisitors();
+        visitors = await mongoStorage.getVisitors();
       } else if (user.role === 'watchman') {
         // Watchman can see visitors they registered
-        visitors = await storage.getVisitorsByWatchman(userId);
+        visitors = await mongoStorage.getVisitorsByWatchman(userId);
       } else {
         // Residents can see their own visitors
-        visitors = await storage.getVisitorsForHost(userId);
+        visitors = await mongoStorage.getVisitorsForHost(userId);
       }
 
       res.json(visitors);
@@ -1920,7 +1920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/visitors/enhanced', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
@@ -1930,16 +1930,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (user.role === 'admin' || user.role === 'super_admin') {
         // Admin can see all visitors and all guest parking bookings
-        visitors = await storage.getVisitors();
-        guestParkingBookings = await storage.getGuestParkingBookings();
+        visitors = await mongoStorage.getVisitors();
+        guestParkingBookings = await mongoStorage.getGuestParkingBookings();
       } else if (user.role === 'watchman') {
         // Watchman can see visitors they registered and all guest parking bookings
-        visitors = await storage.getVisitorsByWatchman(userId);
-        guestParkingBookings = await storage.getGuestParkingBookings();
+        visitors = await mongoStorage.getVisitorsByWatchman(userId);
+        guestParkingBookings = await mongoStorage.getGuestParkingBookings();
       } else {
         // Residents can see their own visitors and their own guest parking bookings
-        visitors = await storage.getVisitorsForHost(userId);
-        guestParkingBookings = await storage.getGuestParkingBookingsByUser(userId);
+        visitors = await mongoStorage.getVisitorsForHost(userId);
+        guestParkingBookings = await mongoStorage.getGuestParkingBookingsByUser(userId);
       }
 
       // Combine visitors and guest parking bookings
@@ -1961,17 +1961,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/visitors/pending', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
       let visitors;
       if (user.role === 'admin' || user.role === 'super_admin') {
-        visitors = await storage.getVisitorsByStatus('pending');
+        visitors = await mongoStorage.getVisitorsByStatus('pending');
       } else {
         // Residents can see their own pending visitors
-        const allVisitors = await storage.getVisitorsForHost(userId);
+        const allVisitors = await mongoStorage.getVisitorsForHost(userId);
         visitors = allVisitors.filter(v => v.status === 'pending');
       }
 
@@ -1985,7 +1985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/visitors', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || (user.role !== 'watchman' && user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'resident')) {
         return res.status(403).json({ message: 'Only watchmen, admins, and residents can register visitors' });
       }
@@ -1994,7 +1994,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If resident is registering, find a watchman to assign
       if (user.role === 'resident') {
-        const watchmen = await storage.getUsersByRole('watchman');
+        const watchmen = await mongoStorage.getUsersByRole('watchman');
         if (watchmen.length > 0) {
           watchmanId = watchmen[0].id; // Assign to first available watchman
         }
@@ -2006,10 +2006,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'pending'
       };
 
-      const visitor = await storage.createVisitor(visitorData);
+      const visitor = await mongoStorage.createVisitor(visitorData);
 
       // Create notification for the host
-      await storage.createVisitorNotification({
+      await mongoStorage.createVisitorNotification({
         visitorId: visitor.id,
         userId: visitor.hostUserId,
         title: 'New Visitor Verification Required',
@@ -2029,13 +2029,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { action, notes } = req.body; // action: 'approve' or 'reject'
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user) {
         return res.status(401).json({ message: 'Unauthorized' });
       }
 
-      const visitor = await storage.getVisitorById(id);
+      const visitor = await mongoStorage.getVisitorById(id);
       if (!visitor) {
         return res.status(404).json({ message: 'Visitor not found' });
       }
@@ -2058,10 +2058,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.rejectionReason = notes;
       }
 
-      const updatedVisitor = await storage.updateVisitor(id, updateData);
+      const updatedVisitor = await mongoStorage.updateVisitor(id, updateData);
 
       // Create notification for watchman
-      await storage.createVisitorNotification({
+      await mongoStorage.createVisitorNotification({
         visitorId: visitor.id,
         userId: visitor.watchmanId,
         title: `Visitor ${action === 'approve' ? 'Approved' : 'Rejected'}`,
@@ -2080,13 +2080,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || (user.role !== 'watchman' && user.role !== 'admin' && user.role !== 'super_admin')) {
         return res.status(403).json({ message: 'Only watchmen and admins can check in visitors' });
       }
 
-      const visitor = await storage.getVisitorById(id);
+      const visitor = await mongoStorage.getVisitorById(id);
       if (!visitor) {
         return res.status(404).json({ message: 'Visitor not found' });
       }
@@ -2095,7 +2095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Visitor must be approved before check-in' });
       }
 
-      const updatedVisitor = await storage.updateVisitor(id, {
+      const updatedVisitor = await mongoStorage.updateVisitor(id, {
         status: 'checked_in',
         checkInTime: new Date(),
       });
@@ -2111,13 +2111,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       
       if (!user || (user.role !== 'watchman' && user.role !== 'admin' && user.role !== 'super_admin')) {
         return res.status(403).json({ message: 'Only watchmen and admins can check out visitors' });
       }
 
-      const visitor = await storage.getVisitorById(id);
+      const visitor = await mongoStorage.getVisitorById(id);
       if (!visitor) {
         return res.status(404).json({ message: 'Visitor not found' });
       }
@@ -2136,7 +2136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         actualDuration = `${hours}h ${minutes}m`;
       }
 
-      const updatedVisitor = await storage.updateVisitor(id, {
+      const updatedVisitor = await mongoStorage.updateVisitor(id, {
         status: 'checked_out',
         checkOutTime,
         actualDuration,
@@ -2152,7 +2152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/visitor-notifications', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const notifications = await storage.getVisitorNotifications(userId);
+      const notifications = await mongoStorage.getVisitorNotifications(userId);
       res.json(notifications);
     } catch (error) {
       console.error('Error fetching visitor notifications:', error);
@@ -2163,7 +2163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch('/api/visitor-notifications/:id/read', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      await storage.markVisitorNotificationRead(id);
+      await mongoStorage.markVisitorNotificationRead(id);
       res.json({ success: true });
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -2174,7 +2174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/visitors/report', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Unauthorized' });
       }
@@ -2185,7 +2185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Start date and end date are required' });
       }
 
-      const visitors = await storage.generateVisitorReport(
+      const visitors = await mongoStorage.generateVisitorReport(
         new Date(startDate as string),
         new Date(endDate as string)
       );
@@ -2213,13 +2213,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/users', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Only admins can create users' });
       }
 
       const userData = req.body;
-      const newUser = await storage.createUser(userData);
+      const newUser = await mongoStorage.createUser(userData);
       res.status(201).json(newUser);
     } catch (error) {
       console.error('Error creating user:', error);
@@ -2230,14 +2230,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/users/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Only admins can update users' });
       }
 
       const { id } = req.params;
       const userData = req.body;
-      const updatedUser = await storage.updateUser(id, userData);
+      const updatedUser = await mongoStorage.updateUser(id, userData);
       res.json(updatedUser);
     } catch (error) {
       console.error('Error updating user:', error);
@@ -2248,13 +2248,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete('/api/users/:id', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user?.claims?.sub;
-      const user = await storage.getUser(userId);
+      const user = await mongoStorage.getUser(userId);
       if (!user || !['admin', 'super_admin'].includes(user.role)) {
         return res.status(403).json({ message: 'Only admins can delete users' });
       }
 
       const { id } = req.params;
-      await storage.deleteUser(id);
+      await mongoStorage.deleteUser(id);
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting user:', error);
