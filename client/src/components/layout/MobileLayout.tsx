@@ -50,12 +50,13 @@ export function MobileLayout() {
   const [showBookingManagementModal, setShowBookingManagementModal] = useState(false);
   const [selectedAmenity, setSelectedAmenity] = useState<{ id: string; name: string; type: string } | null>(null);
   const [showRecentPosts, setShowRecentPosts] = useState(true);
+  const [showRecentBookings, setShowRecentBookings] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: posts, isLoading: postsLoading } = useQuery<PostWithAuthor[]>({
     queryKey: ['/api/posts'],
-    enabled: activeTab === 'community',
+    enabled: activeTab === 'community' || activeTab === 'home',
   });
 
   const { data: amenities, isLoading: amenitiesLoading } = useQuery<Amenity[]>({
@@ -65,7 +66,7 @@ export function MobileLayout() {
 
   const { data: bookings, isLoading: bookingsLoading } = useQuery<BookingWithAmenity[]>({
     queryKey: ['/api/bookings'],
-    enabled: activeTab === 'bookings' || (user?.role === 'admin' || user?.role === 'super_admin'),
+    enabled: activeTab === 'bookings' || activeTab === 'home' || (user?.role === 'admin' || user?.role === 'super_admin'),
   });
 
   const { data: complaints, isLoading: complaintsLoading } = useQuery<any[]>({
@@ -74,7 +75,7 @@ export function MobileLayout() {
       const response = await fetch('/api/posts?type=complaint');
       return response.json();
     },
-    enabled: user?.role === 'admin' || user?.role === 'super_admin',
+    enabled: (user?.role === 'admin' || user?.role === 'super_admin') && (activeTab === 'home' || activeTab === 'admin'),
   });
 
   const { data: biometricRequests, isLoading: biometricLoading } = useQuery<any[]>({
@@ -83,7 +84,7 @@ export function MobileLayout() {
       const response = await fetch('/api/biometric-requests');
       return response.json();
     },
-    enabled: user?.role === 'admin' || user?.role === 'super_admin',
+    enabled: (user?.role === 'admin' || user?.role === 'super_admin') && (activeTab === 'home' || activeTab === 'admin'),
   });
 
   const likePostMutation = useMutation({
@@ -466,14 +467,25 @@ export function MobileLayout() {
       <div className="px-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-medium text-gray-800">Recent Bookings</h3>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setActiveTab('bookings')}
-            className="text-blue-600 hover:text-blue-700"
-          >
-            View All
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowRecentBookings(!showRecentBookings)}
+              className="text-gray-700"
+              data-testid="button-toggle-recent-bookings"
+            >
+              {showRecentBookings ? 'Collapse' : 'Expand'}
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setActiveTab('bookings')}
+              className="text-blue-600 hover:text-blue-700"
+            >
+              View All
+            </Button>
+          </div>
         </div>
         {bookingsLoading ? (
           <div className="space-y-3">
@@ -496,30 +508,32 @@ export function MobileLayout() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {bookings?.filter((booking: any) => booking && booking.id).slice(0, 3).map((booking: any) => (
-              <Card key={booking.id} className="shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <Calendar className="w-5 h-5 text-green-600" />
+          showRecentBookings && (
+            <div className="space-y-3">
+              {bookings?.filter((booking: any) => booking && booking.id).slice(0, 3).map((booking: any) => (
+                <Card key={booking.id} className="shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                          <Calendar className="w-5 h-5 text-green-600" />
+                        </div>
+                        <div>
+                          <h4 className="font-medium text-sm">{booking.amenityName || 'Unknown Amenity'}</h4>
+                          <p className="text-sm text-gray-600">
+                            {booking.bookingDate ? format(new Date(booking.bookingDate), 'MMM dd, yyyy') : 'Date not available'} • {booking.startTime || '00:00'} - {booking.endTime || '00:00'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-medium text-sm">{booking.amenityName || 'Unknown Amenity'}</h4>
-                        <p className="text-sm text-gray-600">
-                          {booking.bookingDate ? format(new Date(booking.bookingDate), 'MMM dd, yyyy') : 'Date not available'} • {booking.startTime || '00:00'} - {booking.endTime || '00:00'}
-                        </p>
-                      </div>
+                      <Badge className="bg-green-100 text-green-800">
+                        {booking.status || 'confirmed'}
+                      </Badge>
                     </div>
-                    <Badge className="bg-green-100 text-green-800">
-                      {booking.status || 'confirmed'}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )
         )}
       </div>
 
