@@ -338,31 +338,64 @@ export const storage: IStorage = {
 
   // Post operations
   async getPosts() {
-    return runQueryAll(`
-      SELECT p.*, u.firstName, u.lastName, u.username 
+    const posts = await runQueryAll(`
+      SELECT p.*, u.firstName, u.lastName, u.username,
+             (SELECT COUNT(*) FROM post_likes WHERE postId = p.id) as likesCount,
+             (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
       FROM posts p 
       LEFT JOIN users u ON p.authorId = u.id 
       ORDER BY p.createdAt DESC
     `);
+    
+    // Transform to include likes and comments data
+    return posts.map(post => ({
+      ...post,
+      likes: post.likesCount,
+      commentsCount: post.commentsCount,
+      comments: [] // Will be populated separately if needed
+    }));
   },
 
   async getPostsByType(type: string) {
-    return runQueryAll(`
-      SELECT p.*, u.firstName, u.lastName, u.username 
+    const posts = await runQueryAll(`
+      SELECT p.*, u.firstName, u.lastName, u.username,
+             (SELECT COUNT(*) FROM post_likes WHERE postId = p.id) as likesCount,
+             (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
       FROM posts p 
       LEFT JOIN users u ON p.authorId = u.id 
       WHERE p.type = ?
       ORDER BY p.createdAt DESC
     `, [type]);
+    
+    // Transform to include likes and comments data
+    return posts.map(post => ({
+      ...post,
+      likes: post.likesCount,
+      commentsCount: post.commentsCount,
+      comments: [] // Will be populated separately if needed
+    }));
   },
 
   async getPost(id: string) {
-    return runQuery(`
-      SELECT p.*, u.firstName, u.lastName, u.username 
+    const post = await runQuery(`
+      SELECT p.*, u.firstName, u.lastName, u.username,
+             (SELECT COUNT(*) FROM post_likes WHERE postId = p.id) as likesCount,
+             (SELECT COUNT(*) FROM comments WHERE postId = p.id) as commentsCount
       FROM posts p 
       LEFT JOIN users u ON p.authorId = u.id 
       WHERE p.id = ?
     `, [id]);
+    
+    if (!post) return null;
+    
+    // Get comments for this post
+    const comments = await this.getComments(id);
+    
+    return {
+      ...post,
+      likes: post.likesCount,
+      comments: comments
+    };
   },
 
   async createPost(post: any) {
@@ -403,6 +436,11 @@ export const storage: IStorage = {
       await runQueryRun('INSERT INTO post_likes (id, postId, userId) VALUES (?, ?, ?)', [likeId, postId, userId]);
     }
     return this.getPost(postId);
+  },
+
+  async hasUserLikedPost(postId: string, userId: string) {
+    const like = await runQuery('SELECT * FROM post_likes WHERE postId = ? AND userId = ?', [postId, userId]);
+    return !!like;
   },
 
   async deletePost(id: string) {

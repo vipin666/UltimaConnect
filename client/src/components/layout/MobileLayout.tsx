@@ -90,8 +90,9 @@ export function MobileLayout() {
     mutationFn: async (postId: string) => {
       return apiRequest('POST', `/api/posts/${postId}/like`, {});
     },
-    onSuccess: () => {
+    onSuccess: (_, postId) => {
       queryClient.invalidateQueries({ queryKey: ['/api/posts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/posts', postId, 'like-status'] });
     },
     onError: (error) => {
       if (isUnauthorizedError(error)) {

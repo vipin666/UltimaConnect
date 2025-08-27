@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { ThumbsUp, MessageCircle, Calendar, MapPin, User } from "lucide-react";
 import { format } from "date-fns";
 import type { PostWithAuthor } from "@shared/schema";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PostCardProps {
   post: PostWithAuthor;
@@ -13,6 +15,20 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
+  const { user } = useAuth();
+  
+  // Check if user has liked this post
+  const { data: likeStatus } = useQuery({
+    queryKey: ['/api/posts', post.id, 'like-status'],
+    queryFn: async () => {
+      const response = await fetch(`/api/posts/${post.id}/like-status`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch like status');
+      }
+      return response.json();
+    },
+    enabled: !!user && !!post.id,
+  });
   const getPostTypeColor = (type: string) => {
     switch (type) {
       case 'event':
@@ -148,10 +164,14 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
                   size="sm"
                   onClick={() => onLike(post.id)}
                   disabled={isLiking}
-                  className="text-primary hover:text-primary hover:bg-blue-50 px-2 py-1 h-8 rounded-md transition-colors"
+                  className={`px-2 py-1 h-8 rounded-md transition-colors ${
+                    likeStatus?.hasLiked 
+                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' 
+                      : 'text-primary hover:text-primary hover:bg-blue-50'
+                  }`}
                   data-testid={`button-like-${post.id}`}
                 >
-                  <ThumbsUp className="w-4 h-4 mr-2" />
+                  <ThumbsUp className={`w-4 h-4 mr-2 ${likeStatus?.hasLiked ? 'fill-current' : ''}`} />
                   <span className="text-sm">{post.likes ?? 0}</span>
                 </Button>
                 
@@ -163,7 +183,7 @@ export function PostCard({ post, onLike, onComment, isLiking }: PostCardProps) {
                   data-testid={`button-comment-${post.id}`}
                 >
                   <MessageCircle className="w-4 h-4 mr-2" />
-                  <span className="text-sm">{post.comments?.length ?? 0}</span>
+                  <span className="text-sm">{post.commentsCount ?? post.comments?.length ?? 0}</span>
                 </Button>
               </div>
             </div>

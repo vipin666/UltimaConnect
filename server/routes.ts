@@ -590,6 +590,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get('/api/posts/:postId/like-status', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const postId = req.params.postId;
+      const hasLiked = await storage.hasUserLikedPost(postId, userId);
+      res.json({ hasLiked });
+    } catch (error) {
+      console.error("Error checking like status:", error);
+      res.status(500).json({ message: "Failed to check like status" });
+    }
+  });
+
   // Comment routes
   app.get('/api/posts/:postId/comments', isAuthenticated, async (req: any, res) => {
     try {
