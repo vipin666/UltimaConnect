@@ -221,6 +221,22 @@ async function createDatabase() {
         FOREIGN KEY (verifiedBy) REFERENCES users (id)
       )`);
 
+      // Create nearby_services table
+      db.run(`CREATE TABLE IF NOT EXISTS nearby_services (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL, -- ironing, milk, internet, cable, electrician, plumbing, shop, other
+        phone TEXT,
+        description TEXT,
+        address TEXT,
+        distanceKm REAL,
+        latitude REAL,
+        longitude REAL,
+        isActive BOOLEAN DEFAULT 1,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`);
+
       // Create admin user
       db.get("SELECT id FROM users WHERE username = 'admin'", async (err, row) => {
         if (err) {

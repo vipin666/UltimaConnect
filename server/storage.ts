@@ -172,6 +172,14 @@ export interface IStorage {
   createVisitorNotification(notification: any): Promise<any>;
   updateVisitorNotification(id: string, updates: any): Promise<any>;
   deleteVisitorNotification(id: string): Promise<void>;
+  
+  // Nearby services operations
+  getNearbyServices(): Promise<any[]>;
+  getNearbyServicesByCategory(category: string): Promise<any[]>;
+  getNearbyService(id: string): Promise<any | undefined>;
+  createNearbyService(service: any): Promise<any>;
+  updateNearbyService(id: string, updates: any): Promise<any>;
+  deleteNearbyService(id: string): Promise<void>;
 }
 
 // Helper function to run SQLite queries
@@ -1166,4 +1174,53 @@ export const storage: IStorage = {
   async createVisitorNotification(notification: any) { return notification; },
   async updateVisitorNotification(id: string, updates: any) { return updates; },
   async deleteVisitorNotification(id: string) {},
+
+  // Nearby services operations
+  async getNearbyServices() {
+    return runQueryAll(`
+      SELECT * FROM nearby_services 
+      WHERE isActive = 1 
+      ORDER BY category, name
+    `);
+  },
+
+  async getNearbyServicesByCategory(category: string) {
+    return runQueryAll(`
+      SELECT * FROM nearby_services 
+      WHERE category = ? AND isActive = 1 
+      ORDER BY name
+    `, [category]);
+  },
+
+  async getNearbyService(id: string) {
+    return runQuery(`
+      SELECT * FROM nearby_services WHERE id = ?
+    `, [id]);
+  },
+
+  async createNearbyService(service: any) {
+    const id = `service-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    await runQueryRun(`
+      INSERT INTO nearby_services (
+        id, name, category, phone, description, address, distanceKm, latitude, longitude, isActive
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id, service.name, service.category, service.phone, service.description,
+      service.address, service.distanceKm, service.latitude, service.longitude, service.isActive ?? 1
+    ]);
+    return this.getNearbyService(id);
+  },
+
+  async updateNearbyService(id: string, updates: any) {
+    const fields = Object.keys(updates).map(key => `${key} = ?`).join(', ');
+    const values = Object.values(updates);
+    await runQueryRun(`
+      UPDATE nearby_services SET ${fields}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?
+    `, [...values, id]);
+    return this.getNearbyService(id);
+  },
+
+  async deleteNearbyService(id: string) {
+    await runQueryRun('DELETE FROM nearby_services WHERE id = ?', [id]);
+  },
 };

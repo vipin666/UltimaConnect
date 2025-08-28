@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Users, AlertTriangle, Calendar, BarChart, Settings, Wrench, Search, ChevronDown, ChevronRight, Home, Fingerprint, ArrowLeft, MessageSquare, UserCheck } from "lucide-react";
+import { Users, AlertTriangle, Calendar, BarChart, Settings, Wrench, Search, ChevronDown, ChevronRight, Home, Fingerprint, ArrowLeft, MessageSquare, UserCheck, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { User, PostWithAuthor } from "@shared/schema";
@@ -19,6 +19,7 @@ import MaintenanceManagement from "@/components/admin/MaintenanceManagement";
 import { FlatManagement } from "@/components/admin/FlatManagement";
 import { BiometricManagement } from "@/components/admin/BiometricManagement";
 import { CommitteeManagement } from "@/components/admin/CommitteeManagement";
+import ServicesManagement from "@/components/admin/ServicesManagement";
 import { useState, useEffect } from "react";
 
 // Helper function to generate original password based on user data
@@ -47,6 +48,16 @@ const generateOriginalPassword = (user: any): string => {
   return 'password123'; // fallback
 };
 
+// Helper function to get display password (actual reset password or generated)
+const getDisplayPassword = (user: any, resetPasswords: Record<string, string>): string => {
+  // If user has a reset password stored in the UI state, show that
+  if (resetPasswords[user.id]) {
+    return resetPasswords[user.id];
+  }
+  // Otherwise show the generated original password
+  return generateOriginalPassword(user);
+};
+
 export default function Admin() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -63,6 +74,7 @@ export default function Admin() {
   const [passwordResetUser, setPasswordResetUser] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+  const [resetPasswords, setResetPasswords] = useState<Record<string, string>>({});
 
   // Check for target tab from sessionStorage (for navigation from priority actions)
   useEffect(() => {
@@ -340,9 +352,21 @@ export default function Admin() {
   // Password reset mutation
   const resetPasswordMutation = useMutation({
     mutationFn: async ({ userId, newPassword }: { userId: string; newPassword: string }) => {
-      return apiRequest('PATCH', `/api/users/${userId}/password`, { newPassword });
+      console.log('Password reset mutation called');
+      console.log('User ID:', userId);
+      console.log('New password:', newPassword);
+      
+      const response = await apiRequest('PATCH', `/api/users/${userId}/password`, { newPassword });
+      console.log('Password reset response:', response);
+      return response;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Password reset success:', data);
+      // Store the new password in the UI state
+      setResetPasswords(prev => ({
+        ...prev,
+        [passwordResetUser!]: newPassword
+      }));
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
       setPasswordResetUser(null);
       setNewPassword('');
@@ -352,6 +376,7 @@ export default function Admin() {
       });
     },
     onError: (error) => {
+      console.log('Password reset error:', error);
       if (isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
@@ -474,7 +499,7 @@ export default function Admin() {
 
       <div className="max-w-6xl mx-auto p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-9">
+          <TabsList className="grid w-full grid-cols-10">
             <TabsTrigger value="overview" className="flex items-center space-x-2">
               <BarChart className="w-4 h-4" />
               <span>Overview</span>
@@ -510,6 +535,10 @@ export default function Admin() {
             <TabsTrigger value="committee" className="flex items-center space-x-2">
               <Users className="w-4 h-4" />
               <span>Committee</span>
+            </TabsTrigger>
+            <TabsTrigger value="services" className="flex items-center space-x-2">
+              <Building2 className="w-4 h-4" />
+              <span>Services</span>
             </TabsTrigger>
           </TabsList>
 
@@ -1024,7 +1053,7 @@ export default function Admin() {
                                       <span className="text-sm text-gray-600">
                                         <span className="font-medium">Password:</span> 
                                         {showPasswords[user.id] ? (
-                                          <span className="ml-1 font-mono">{generateOriginalPassword(user)}</span>
+                                          <span className="ml-1 font-mono">{getDisplayPassword(user, resetPasswords)}</span>
                                         ) : (
                                           <span className="ml-1">••••••••</span>
                                         )}
@@ -1045,7 +1074,7 @@ export default function Admin() {
                                         variant="ghost"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          copyCredentials(user.username || '', generateOriginalPassword(user));
+                                          copyCredentials(user.username || '', getDisplayPassword(user, resetPasswords));
                                         }}
                                         className="h-4 w-4 p-0 text-xs"
                                       >
@@ -1500,6 +1529,9 @@ export default function Admin() {
 
           <TabsContent value="committee" className="space-y-6">
             <CommitteeManagement />
+          </TabsContent>
+          <TabsContent value="services" className="space-y-6">
+            <ServicesManagement />
           </TabsContent>
         </Tabs>
 

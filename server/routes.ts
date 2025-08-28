@@ -7,7 +7,7 @@ import { LocalStorageService } from "./localStorage";
 import { insertPostSchema, insertCommentSchema, insertBookingSchema, insertGuestNotificationSchema, insertMessageSchema, insertAnnouncementSchema, insertMaintenanceRequestSchema, insertBiometricRequestSchema, insertTenantDocumentSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import passport from "passport";
-import { Strategy as LocalStrategy } from "passport-local";
+// import { Strategy as LocalStrategy } from "passport-local";
 
 // Helper function to generate time slots based on amenity type
 function generateTimeSlots(amenityType: string) {
@@ -129,32 +129,7 @@ async function validateConsecutiveDayBookings(userId: string, amenityId: string,
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup local authentication strategy
-  passport.use(
-    new LocalStrategy(
-      { usernameField: 'username', passwordField: 'password' },
-      async (username, password, done) => {
-        try {
-          const user = await storage.getUserByUsername(username.toLowerCase());
-          if (!user || !user.password) {
-            return done(null, false, { message: 'Invalid username or password' });
-          }
-          
-          const isValidPassword = await comparePasswords(password, user.password);
-          if (!isValidPassword) {
-            return done(null, false, { message: 'Invalid username or password' });
-          }
-          
-          if (user.status !== 'active') {
-            return done(null, false, { message: 'Account is not active. Please contact admin.' });
-          }
-          
-          return done(null, user);
-        } catch (error) {
-          return done(error);
-        }
-      }
-    )
-  );
+  // LocalStrategy is configured in localAuth.setupAuth
 
   // Auth middleware
   await setupAuth(app);
@@ -169,6 +144,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: info?.message || 'Invalid credentials' });
       }
       
+      req.logIn(user, (err: any) => {
+        if (err) {
+          return res.status(500).json({ message: 'Login failed' });
+        }
+        res.json(user);
+      });
+    })(req, res, next);
+  });
+
+  // Backward-compatible alias for clients calling /api/auth/login
+  app.post('/api/auth/login', (req, res, next) => {
+    passport.authenticate('local', (err: any, user: any, info: any) => {
+      if (err) {
+        return res.status(500).json({ message: 'Authentication failed' });
+      }
+      if (!user) {
+        return res.status(401).json({ message: info?.message || 'Invalid credentials' });
+      }
+
       req.logIn(user, (err: any) => {
         if (err) {
           return res.status(500).json({ message: 'Login failed' });
@@ -220,6 +214,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
           lastName: user.lastName,
           status: user.status 
         } 
+      });
+    } catch (error) {
+      console.error('Registration error:', error);
+      res.status(500).json({ message: 'Registration failed' });
+    }
+  });
+
+  // Backward-compatible alias for clients calling /api/auth/register
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const { username, password, firstName, lastName, email, unitNumber } = req.body;
+
+      const existingUser = await storage.getUserByUsername(username.toLowerCase());
+      if (existingUser) {
+        return res.status(400).json({ message: 'Username already exists' });
+      }
+
+      const existingEmail = await storage.getUserByEmail(email);
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+
+      const hashedPassword = await hashPassword(password);
+
+      const userData = {
+        username: username.toLowerCase(),
+        password: hashedPassword,
+        firstName,
+        lastName,
+        email,
+        unitNumber,
+        role: 'resident' as const,
+        status: 'pending' as const,
+        isOwner: true,
+      };
+
+      const user = await storage.createUser(userData);
+
+      res.status(201).json({
+        message: 'Registration successful. Please wait for admin approval.',
+        user: {
+          id: user.id,
+          username: user.username,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          status: user.status,
+        },
       });
     } catch (error) {
       console.error('Registration error:', error);
@@ -458,6 +499,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating user status:", error);
       res.status(500).json({ message: "Failed to update user status" });
+    }
+  });
+
+  app.patch('/api/users/:userId/password', isAuthenticated, async (req: any, res) => {
+    try {
+      console.log('Password reset endpoint called');
+      console.log('Request body:', req.body);
+      console.log('User ID:', req.params.userId);
+      
+      const user = req.user;
+      const targetUserId = req.params.userId;
+      const { newPassword } = req.body;
+      
+      console.log('Current user:', user?.username, user?.role);
+      console.log('Target user ID:', targetUserId);
+      console.log('New password provided:', !!newPassword);
+      
+      if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
+        console.log('Unauthorized access attempt');
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      if (!newPassword) {
+        console.log('No new password provided');
+        return res.status(400).json({ message: "New password is required" });
+      }
+      
+      // Hash the new password
+      const hashedPassword = await hashPassword(newPassword);
+      console.log('Password hashed successfully');
+      
+      // Update the user's password
+      const updatedUser = await storage.updateUserPassword(targetUserId, hashedPassword);
+      console.log('Password updated successfully for user:', updatedUser?.username);
+      
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error updating user password:", error);
+      res.status(500).json({ message: "Failed to update user password" });
     }
   });
 
@@ -2259,6 +2339,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error deleting user:', error);
       res.status(500).json({ message: 'Failed to delete user' });
+    }
+  });
+
+  // Nearby Services Endpoints
+  // Public endpoint to get all services
+  app.get('/api/services', async (req: any, res) => {
+    try {
+      const { category } = req.query;
+      let services;
+      if (category) {
+        services = await storage.getNearbyServicesByCategory(category);
+      } else {
+        services = await storage.getNearbyServices();
+      }
+      res.json(services);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+      res.status(500).json({ message: 'Failed to fetch services' });
+    }
+  });
+
+  // Admin endpoints for managing services
+  app.post('/api/services', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Only admins can create services' });
+      }
+
+      const serviceData = req.body;
+      const newService = await storage.createNearbyService(serviceData);
+      res.status(201).json(newService);
+    } catch (error) {
+      console.error('Error creating service:', error);
+      res.status(500).json({ message: 'Failed to create service' });
+    }
+  });
+
+  app.put('/api/services/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Only admins can update services' });
+      }
+
+      const { id } = req.params;
+      const serviceData = req.body;
+      const updatedService = await storage.updateNearbyService(id, serviceData);
+      res.json(updatedService);
+    } catch (error) {
+      console.error('Error updating service:', error);
+      res.status(500).json({ message: 'Failed to update service' });
+    }
+  });
+
+  app.delete('/api/services/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const user = await storage.getUser(userId);
+      if (!user || !['admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Only admins can delete services' });
+      }
+
+      const { id } = req.params;
+      await storage.deleteNearbyService(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting service:', error);
+      res.status(500).json({ message: 'Failed to delete service' });
     }
   });
 

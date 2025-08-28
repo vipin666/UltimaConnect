@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +31,10 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("login");
+
+  const { data: units = [] } = useQuery({
+    queryKey: ['/api/units'],
+  });
 
   // Redirect if already logged in
   if (!isLoading && user) {
@@ -360,14 +366,21 @@ export default function AuthPage() {
                   
                   <div className="space-y-2">
                     <Label htmlFor="unitNumber">Unit Number</Label>
-                    <Input
-                      id="unitNumber"
-                      type="text"
-                      placeholder="e.g., 101A"
-                      value={registerForm.unitNumber}
-                      onChange={(e) => setRegisterForm({...registerForm, unitNumber: e.target.value})}
-                      data-testid="input-register-unit"
-                    />
+                    <Select 
+                      value={registerForm.unitNumber} 
+                      onValueChange={(value) => setRegisterForm({...registerForm, unitNumber: value})}
+                    >
+                      <SelectTrigger data-testid="input-register-unit">
+                        <SelectValue placeholder="Select unit number" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {units.map((unit: any) => (
+                          <SelectItem key={unit.unitNumber} value={unit.unitNumber}>
+                            {unit.unitNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   
                   <div className="space-y-2">

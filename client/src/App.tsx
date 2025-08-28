@@ -21,6 +21,7 @@ import ClearSessions from "@/pages/clear-sessions";
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
 
+  // Show loading state while authentication is being determined
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -34,13 +35,13 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
+      <Route path="/auth" component={AuthPage} />
+      <Route path="/clear-sessions" component={ClearSessions} />
       {!isAuthenticated ? (
         <>
           <Route path="/" component={Landing} />
-          <Route path="/login" component={LoginPage} />
-          <Route path="/register" component={RegisterPage} />
-          <Route path="/auth" component={AuthPage} />
-          <Route path="/clear-sessions" component={ClearSessions} />
         </>
       ) : (
         <>
@@ -50,10 +51,9 @@ function Router() {
           <Route path="/admin/financial" component={AdminFinancialDashboard} />
           <Route path="/my-fees" component={MyFeesPage} />
           <Route path="/visitors" component={VisitorsPage} />
-          <Route path="/auth" component={AuthPage} />
         </>
       )}
-      <Route component={NotFound} />
+      <Route path="*" component={NotFound} />
     </Switch>
   );
 }

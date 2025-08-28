@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { queryClient } from '@/lib/queryClient';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
@@ -23,10 +25,21 @@ export default function RegisterPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  const { data: units = [] } = useQuery({
+    queryKey: ['/api/units'],
+  });
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleUnitChange = (value: string) => {
+    setFormData({
+      ...formData,
+      unitNumber: value,
     });
   };
 
@@ -159,15 +172,18 @@ export default function RegisterPage() {
 
             <div className="space-y-2">
               <Label htmlFor="unitNumber">Unit Number</Label>
-              <Input
-                id="unitNumber"
-                name="unitNumber"
-                type="text"
-                value={formData.unitNumber}
-                onChange={handleChange}
-                required
-                placeholder="e.g., A101, B205"
-              />
+              <Select value={formData.unitNumber} onValueChange={handleUnitChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select unit number" />
+                </SelectTrigger>
+                <SelectContent>
+                  {units.map((unit: any) => (
+                    <SelectItem key={unit.unitNumber} value={unit.unitNumber}>
+                      {unit.unitNumber}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

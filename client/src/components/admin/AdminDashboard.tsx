@@ -7,15 +7,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Settings, MessageSquare, Wrench, UserCheck, UserX, Shield, AlertTriangle, Search, ChevronDown, ChevronRight, Calendar } from "lucide-react";
+import { Users, Settings, MessageSquare, Wrench, UserCheck, UserX, Shield, AlertTriangle, Search, ChevronDown, ChevronRight, Calendar, Building2 } from "lucide-react";
 import { format } from "date-fns";
 import type { User, MaintenanceRequestWithUsers } from "@shared/schema";
 import { BookingManagementModal } from "../bookings/BookingManagementModal";
+import ServicesManagement from "./ServicesManagement";
 
 export function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'users' | 'maintenance'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'maintenance' | 'services'>('users');
   const [viewAllDropdown, setViewAllDropdown] = useState(true);
   const [showBookingManagementModal, setShowBookingManagementModal] = useState(false);
   
@@ -872,12 +873,22 @@ export function AdminDashboard() {
           <Wrench className="w-4 h-4 mr-2" />
           Maintenance
         </Button>
+        <Button
+          variant={activeTab === 'services' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('services')}
+          className="flex-1 text-sm"
+          data-testid="tab-services"
+        >
+          <Building2 className="w-4 h-4 mr-2" />
+          Services
+        </Button>
 
       </div>
 
       {/* Tab Content */}
       {activeTab === 'users' && renderUsersTab()}
       {activeTab === 'maintenance' && renderMaintenanceTab()}
+      {activeTab === 'services' && <ServicesManagement />}
 
       {/* Recent Posts Section */}
       <div className="space-y-4">

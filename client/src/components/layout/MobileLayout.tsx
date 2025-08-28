@@ -20,12 +20,13 @@ import { BookingManagementModal } from "../bookings/BookingManagementModal";
 import { CommitteeMembers } from "../committee/CommitteeMembers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3, DollarSign, Users, Wrench, Home, MessageSquare, Shield, UserCheck } from "lucide-react";
+import { Plus, AlertTriangle, Calendar, Settings, Fingerprint, FileText, BarChart3, DollarSign, Users, Wrench, Home, MessageSquare, Shield, UserCheck, Building2 } from "lucide-react";
 import type { PostWithAuthor, Amenity, BookingWithAmenity } from "@shared/schema";
 import { format } from "date-fns";
 
@@ -52,6 +53,7 @@ export function MobileLayout() {
   const [showRecentPosts, setShowRecentPosts] = useState(true);
   const [showRecentBookings, setShowRecentBookings] = useState(true);
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
+  const [showServicesDialog, setShowServicesDialog] = useState(false);
   const { toast } = useToast();
 
   const { data: posts, isLoading: postsLoading } = useQuery<PostWithAuthor[]>({
@@ -85,6 +87,14 @@ export function MobileLayout() {
       return response.json();
     },
     enabled: (user?.role === 'admin' || user?.role === 'super_admin') && (activeTab === 'home' || activeTab === 'admin'),
+  });
+
+  const { data: services, isLoading: servicesLoading } = useQuery<any[]>({
+    queryKey: ['/api/services'],
+    queryFn: async () => {
+      const response = await fetch('/api/services');
+      return response.json();
+    },
   });
 
   const likePostMutation = useMutation({
@@ -361,6 +371,102 @@ export function MobileLayout() {
       {/* Committee Members for Normal Users */}
       {user?.role === 'resident' && <CommitteeMembers />}
 
+      {/* Quick Status Cards for Residents */}
+      {user?.role === 'resident' && (
+        <div className="px-4 mb-6">
+          <h3 className="text-lg font-medium text-gray-800 mb-3">Quick Status</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {/* Posts Count */}
+            <Card className="shadow-md">
+              <CardContent className="p-4 text-center">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <MessageSquare className="w-4 h-4 text-blue-600" />
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{posts?.length || 0}</p>
+                <p className="text-xs text-gray-600">Posts</p>
+              </CardContent>
+            </Card>
+
+            {/* Bookings Count */}
+            <Card className="shadow-md">
+              <CardContent className="p-4 text-center">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                  <Calendar className="w-4 h-4 text-green-600" />
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{Array.isArray(bookings) ? bookings.length : 0}</p>
+                <p className="text-xs text-gray-600">Bookings</p>
+              </CardContent>
+            </Card>
+
+            {/* Nearby Services Count - Clickable */}
+            <Dialog open={showServicesDialog} onOpenChange={setShowServicesDialog}>
+              <DialogTrigger asChild>
+                <Card className="shadow-md cursor-pointer hover:shadow-lg transition-shadow">
+                  <CardContent className="p-4 text-center">
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                      <Building2 className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <p className="text-2xl font-bold text-gray-900">{services?.length || 0}</p>
+                    <p className="text-xs text-gray-600">Nearby</p>
+                  </CardContent>
+                </Card>
+              </DialogTrigger>
+              <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center space-x-2">
+                    <Building2 className="w-5 h-5" />
+                    <span>Nearby Services</span>
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {servicesLoading ? (
+                    <div className="text-center py-4">Loading services...</div>
+                  ) : services && services.length > 0 ? (
+                    services.map((service: any) => (
+                      <Card key={service.id} className="hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="font-semibold text-lg">{service.name}</h3>
+                                <Badge variant="secondary" className="text-xs">
+                                  {service.category}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-3">{service.description}</p>
+                              <div className="flex items-center gap-2 mb-2 text-sm">
+                                <span className="text-muted-foreground">📍 {service.address}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium">{service.phone}</span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => window.open(`tel:${service.phone}`, '_self')}
+                                >
+                                  Call
+                                </Button>
+                              </div>
+                              <div className="mt-2 text-sm text-muted-foreground">
+                                Distance: {service.distanceKm} km
+                              </div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground">
+                      No services available
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      )}
+
       {/* Recent Posts */}
       <div className="px-4">
         <div className="flex items-center justify-between mb-3">
@@ -576,34 +682,7 @@ export function MobileLayout() {
         </div>
       )}
 
-      {/* Quick Stats */}
-      <div className="px-4">
-        <h3 className="text-lg font-medium text-gray-800 mb-3">Quick Stats</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <Building className="w-5 h-5 text-blue-600 mr-2" />
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Posts</p>
-                  <p className="text-lg font-bold">{posts?.length || 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center">
-                <Calendar className="w-5 h-5 text-green-600 mr-2" />
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Bookings</p>
-                  <p className="text-lg font-bold">{bookings?.length || 0}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+
     </div>
   );
 
@@ -1092,6 +1171,8 @@ export function MobileLayout() {
           onClose={() => setCommentPostId(null)}
         />
       )}
+
+
     </div>
   );
 }

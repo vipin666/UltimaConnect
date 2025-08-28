@@ -7,8 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { queryClient } from '@/lib/queryClient';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function LoginPage() {
+  const { user, isAuthenticated } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -16,13 +18,19 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
+  // Redirect if already authenticated
+  if (isAuthenticated && user) {
+    window.location.href = '/';
+    return null;
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetch('/api/auth/local/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -39,10 +47,8 @@ export default function LoginPage() {
         });
         // Invalidate the auth query to refetch user data
         await queryClient.invalidateQueries({ queryKey: ['/api/auth/user'] });
-        // Small delay to ensure the query refetch completes
-        setTimeout(() => {
-          setLocation('/');
-        }, 100);
+        // Redirect everyone to home
+        window.location.href = '/';
       } else {
         const errorData = await response.json();
         setError(errorData.message || 'Login failed');

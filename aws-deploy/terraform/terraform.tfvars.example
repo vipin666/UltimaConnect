@@ -1,0 +1,16 @@
+# Copy this file to terraform.tfvars and update the values
+
+aws_region = "us-east-1"
+
+# SSL Certificate ARN (optional - leave empty for HTTP only)
+certificate_arn = ""
+
+# Session secret for the application (generate a secure random string)
+session_secret = "your-secure-session-secret-here"
+
+# Domain name for the application (optional)
+domain_name = ""
+
+# Environment name
+environment = "production"
+

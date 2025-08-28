@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building, Shield, Calendar, Users, AlertTriangle, MessageCircle, Heart, MessageSquare, UserCheck, Fingerprint } from "lucide-react";
+import { Building, Shield, Calendar, Users, AlertTriangle, MessageCircle, Heart, MessageSquare, UserCheck, Fingerprint, Phone, MapPin, Search } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { PostWithAuthor } from "@shared/schema";
 import { format } from "date-fns";
@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function Landing() {
   const { user } = useAuth();
@@ -38,9 +39,16 @@ export default function Landing() {
     enabled: !user, // Only for non-logged in users
   });
 
+  // Fetch nearby services
+  const { data: services = [], isLoading: servicesLoading } = useQuery<any[]>({
+    queryKey: ['/api/services'],
+    queryFn: async () => {
+      const response = await fetch('/api/services');
+      return response.json();
+    },
+  });
 
-
-
+  const [servicesOpen, setServicesOpen] = useState(false);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -247,6 +255,76 @@ export default function Landing() {
             </div>
           )}
 
+          {/* Nearby Services Section - prominent for admins only */}
+          {isAdmin && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Building className="w-5 h-5 text-blue-500" />
+                <h2 className="text-xl font-medium">Nearby Services</h2>
+              </div>
+              {servicesLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <Card key={i} className="animate-pulse">
+                      <CardContent className="p-4">
+                        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded w-1/2 mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : services.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {services.slice(0, 6).map((service) => (
+                    <Card key={service.id} className="hover:shadow-md transition-shadow">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="font-medium text-gray-800">{service.name}</h3>
+                          <Badge variant="secondary" className="text-xs">
+                            {service.category}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                          {service.description}
+                        </p>
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                          <MapPin className="w-4 h-4" />
+                          <span>{service.address}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Phone className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm font-medium">{service.phone}</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(`tel:${service.phone}`, '_self')}
+                            >
+                              Call
+                            </Button>
+                            <Badge variant="outline" className="text-xs">
+                              {service.distanceKm} km
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="p-6 text-center">
+                    <Building className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500">No services available</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
           {/* Features Section */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card className="text-center">
@@ -280,6 +358,66 @@ export default function Landing() {
         </div>
       </div>
 
+      {/* Floating Nearby Services popup trigger for residents */}
+      {user && !isAdmin && (
+        <Dialog open={servicesOpen} onOpenChange={setServicesOpen}>
+          <div className="fixed bottom-4 right-4 z-40">
+            <DialogTrigger asChild>
+              <Button size="sm" variant="secondary" className="shadow-md px-3 py-2">
+                <MapPin className="w-4 h-4 mr-2" /> Nearby services
+              </Button>
+            </DialogTrigger>
+          </div>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nearby Services</DialogTitle>
+            </DialogHeader>
+            {servicesLoading ? (
+              <div className="space-y-3">
+                {[1,2,3,4].map((i) => (
+                  <Card key={i} className="animate-pulse">
+                    <CardContent className="p-4">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : services.length > 0 ? (
+              <div className="space-y-3">
+                {services.map((service) => (
+                  <Card key={service.id}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-1">
+                        <div className="font-medium text-gray-800">{service.name}</div>
+                        <Badge variant="outline" className="text-xs">{service.category}</Badge>
+                      </div>
+                      {service.description && (
+                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">{service.description}</p>
+                      )}
+                      {service.address && (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+                          <MapPin className="w-4 h-4" />
+                          <span>{service.address}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm font-medium">{service.phone}</span>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">{service.distanceKm} km</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">No services available</div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
 
     </div>
   );
